@@ -57,20 +57,28 @@
         // =====================================================
         // ▼ 請將你 index.tsx 的內容貼在下方 (除了 import 以外) ▼
         // =====================================================
+        const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
 
-        // 範例：如果你原本的 index.tsx 有 App 組件，貼在這邊
-        const App = () => {
-            return (
-                <div className="p-10 text-center">
-                    <h1 className="text-3xl font-bold text-teal-600">
-                        CantoLearn AI 網站已修復！
-                    </h1>
-                    <p className="mt-4">
-                        請將 index.tsx 的程式碼貼入 HTML 的 script 區塊中。
-                    </p>
-                </div>
-            );
-        };
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+        
 
         // =====================================================
         // ▲ 貼上結束 ▲
