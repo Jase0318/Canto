@@ -1,83 +1,32 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CantoLearn AI</title>
-    
-    <!-- 1. 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 2. 引入 React 和 ReactDOM (使用公開穩定的 CDN: esm.sh) -->
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1"
-      }
-    }
-    </script>
-    
-    <!-- 3. 引入 Babel (讓瀏覽器能看懂 React/JSX) -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- 字體設定 -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              chinese: ['Noto Sans TC', 'sans-serif'],
-            },
-            colors: {
-              teal: {
-                50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6',
-                600: '#0d9488', 700: '#0f766e', 900: '#134e4a',
-              }
-            }
-          }
-        }
-      }
-    </script>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans antialiased">
-    
-    <!-- React 的掛載點 -->
+<body>
     <div id="root"></div>
-
-    <!-- ⚠️ 重點：這裡 type 改為 text/babel，並直接寫入程式碼 -->
-    <script type="text/babel" data-type="module">
-        import React, { useState, useEffect } from 'react';
-        import { createRoot } from 'react-dom/client';
-        import { Mic, Volume2, History, Trash2 } from 'lucide-react';
-
-        // =====================================================
-        // ▼ 請將你 index.tsx 的內容貼在下方 (除了 import 以外) ▼
-        // =====================================================
-
-        // 範例：如果你原本的 index.tsx 有 App 組件，貼在這邊
-        const App = () => {
+    <script type="text/babel">
+        function App() {
             return (
-                <div className="p-10 text-center">
-                    <h1 className="text-3xl font-bold text-teal-600">
-                        CantoLearn AI 網站已修復！
-                    </h1>
-                    <p className="mt-4">
-                        請將 index.tsx 的程式碼貼入 HTML 的 script 區塊中。
-                    </p>
+                <div className="p-10 bg-teal-50 min-h-screen flex items-center justify-center">
+                    <div className="bg-white p-8 rounded-xl shadow-lg">
+                        <h1 className="text-3xl font-bold text-teal-600 mb-4">
+                            ✅ 測試成功！
+                        </h1>
+                        <p className="text-gray-600">你的 GitHub Pages 環境是正常的。</p>
+                        <button className="mt-4 px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700" 
+                                onClick={() => alert("React 運作中！")}>
+                            點我測試
+                        </button>
+                    </div>
                 </div>
             );
-        };
-
-        // =====================================================
-        // ▲ 貼上結束 ▲
-        // =====================================================
-
-        // 啟動 React
-        const root = createRoot(document.getElementById('root'));
+        }
+        const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
     </script>
 </body>
