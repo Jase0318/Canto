@@ -1,0 +1,5 @@
+{
+  "name": "CantoLearn AI",
+  "description": "A modern Cantonese learning tool that translates text to Jyutping, extracts key vocabulary, and provides pronunciation.",
+  "requestFramePermissions": []
+}
