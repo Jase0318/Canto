@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-HK">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CantoLearn AI - 粵語學習助手</title>
@@ -14,21 +14,17 @@
     <!-- Babel for in-browser JSX compilation -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Import Maps to load modules from CDN -->
+    <!-- Import Maps: Defines where to load libraries from -->
     <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "@google/genai": "https://esm.sh/@google/genai@0.0.12",
-    "lucide-react": "https://esm.sh/lucide-react@0.344.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "vite": "https://aistudiocdn.com/vite@^7.2.6",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
-  }
-}
-</script>
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "@google/genai": "https://esm.sh/@google/genai@0.1.1",
+            "lucide-react": "https://esm.sh/lucide-react@0.344.0"
+        }
+    }
+    </script>
 
     <script>
       tailwind.config = {
@@ -50,435 +46,455 @@
       }
     </script>
     <style>
-      /* Hide content until React loads to prevent flash */
+      /* Hide content until React loads */
       #root:empty { display: none; }
       body { background-color: #f8fafc; }
+      
+      /* Animation Utilities */
+      .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
-  </head>
-  <body class="bg-slate-50 text-slate-900 font-sans antialiased selection:bg-teal-100 selection:text-teal-900">
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased selection:bg-teal-100 selection:text-teal-900">
     
     <div id="root"></div>
-    <div id="loading-fallback" class="fixed inset-0 flex items-center justify-center text-slate-400 text-sm">
-      Loading Application...
+    
+    <!-- Loading / Error Fallback -->
+    <div id="loading-fallback" class="fixed inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-600 mb-4"></div>
+        <h2 class="text-lg font-semibold">Loading CantoLearn...</h2>
+        <p class="text-sm mt-2 text-slate-400 max-w-md">
+            If this takes longer than a few seconds, please check:
+        </p>
+        <ul class="text-xs mt-2 text-left list-disc pl-5 space-y-1 text-slate-400">
+            <li>Are you running this on a server? (GitHub Pages or localhost)</li>
+            <li>Direct file access (file://) is not supported due to browser security.</li>
+            <li>Check your internet connection (Libraries are loaded from CDN).</li>
+        </ul>
+        <div id="error-display" class="mt-6 text-red-500 text-xs font-mono bg-red-50 p-4 rounded hidden w-full max-w-lg overflow-auto"></div>
     </div>
 
-    <!-- MAIN APPLICATION LOGIC -->
-    <script type="text/babel" data-type="module">
-      import React, { useState, useEffect, useCallback } from 'react';
-      import { createRoot } from 'react-dom/client';
-      import { GoogleGenAI, Type } from '@google/genai';
-      import { BookOpen, History, Sparkles, Trash2, Search, Loader2, X, Plus, Volume2, KeyRound } from 'lucide-react';
-
-      // --- SERVICES & TYPES ---
-      
-      const STORAGE_KEY_HISTORY = "cantolearn_history_v1";
-      const STORAGE_KEY_API = "cantolearn_api_key";
-
-      // Initialize Gemini Client dynamically
-      const getAiClient = (apiKey) => {
-        return new GoogleGenAI({ apiKey: apiKey });
-      };
-
-      const translationSchema = {
-        type: Type.OBJECT,
-        properties: {
-          items: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                text: { type: Type.STRING, description: "Traditional Chinese word" },
-                jyutping: { type: Type.STRING, description: "LSHK Jyutping" },
-                partOfSpeech: { type: Type.STRING, description: "Part of speech" },
-              },
-              required: ["text", "jyutping", "partOfSpeech"],
-            },
-          },
-        },
-        required: ["items"],
-      };
-
-      const suggestionSchema = {
-        type: Type.OBJECT,
-        properties: {
-          suggestions: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                text: { type: Type.STRING, description: "HK Colloquial word" },
-                jyutping: { type: Type.STRING, description: "LSHK Jyutping" },
-                explanation: { type: Type.STRING, description: "Meaning" },
-              },
-              required: ["text", "jyutping", "explanation"],
-            },
-          },
-        },
-        required: ["suggestions"],
-      };
-
-      const translateToCantonese = async (inputText, apiKey) => {
-        try {
-          const ai = getAiClient(apiKey);
-          const prompt = `
-            You are a Cantonese language expert. Analyze input: "${inputText}".
-            
-            Rules:
-            1. If spaces exist (e.g. "食飯 瞓覺"), treat each space-separated segment as ONE vocabulary item.
-            2. If no spaces (e.g. "身體健康"), treat the continuous string as ONE item unless it's a very long sentence.
-            3. Keep meaningful words (Nouns, Verbs, Adj, Idioms). Remove pure grammatical particles if in a long sentence.
-            4. Output Traditional Chinese and LSHK Jyutping.
-          `;
-
-          const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: translationSchema,
-              temperature: 0.1, 
-            },
-          });
-
-          const jsonText = response.text;
-          const parsed = JSON.parse(jsonText);
-          return parsed.items || [];
-        } catch (error) {
-          console.error("Translation Error:", error);
-          throw error;
-        }
-      };
-
-      const getColloquialSuggestions = async (word, apiKey) => {
-        try {
-          const ai = getAiClient(apiKey);
-          const prompt = `
-            User selected: "${word}".
-            Provide 2-3 **Hong Kong colloquial Cantonese** synonyms/slang.
-            E.g. Input "冰淇淋" -> Output "雪糕". Input "吃飯" -> Output "食飯", "食嘢".
-          `;
-
-          const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-              responseMimeType: "application/json",
-              responseSchema: suggestionSchema,
-              temperature: 0.4,
-            },
-          });
-
-          const jsonText = response.text;
-          const parsed = JSON.parse(jsonText);
-          return parsed.suggestions || [];
-        } catch (error) {
-          console.error("Suggestion Error:", error);
-          return [];
-        }
-      };
-
-      // --- COMPONENTS ---
-
-      const AudioButton = ({ text }) => {
-        const [isPlaying, setIsPlaying] = useState(false);
-
-        const handlePlay = useCallback((e) => {
-          e.stopPropagation();
-          if (!window.speechSynthesis) {
-            alert("Browser doesn't support TTS.");
-            return;
-          }
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'zh-HK'; 
-          utterance.rate = 0.8;
-          utterance.onstart = () => setIsPlaying(true);
-          utterance.onend = () => setIsPlaying(false);
-          utterance.onerror = () => setIsPlaying(false);
-          window.speechSynthesis.speak(utterance);
-        }, [text]);
-
-        return (
-          <button onClick={handlePlay} className={`p-1.5 rounded-full transition-colors ${isPlaying ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100 hover:text-teal-600'}`}>
-            <Volume2 size={18} />
-          </button>
-        );
-      };
-
-      const ResultCard = ({ item, onClick }) => (
-        <div 
-          onClick={onClick}
-          className={`bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center justify-center relative transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md hover:border-teal-200 hover:-translate-y-0.5' : ''}`}
-        >
-          <div className="absolute top-2 right-2"><AudioButton text={item.text} /></div>
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{item.partOfSpeech}</div>
-          <div className="text-3xl font-chinese font-medium text-slate-800 mb-1 text-center">{item.text}</div>
-          <div className="text-lg font-medium text-teal-600 font-sans tracking-tight">{item.jyutping}</div>
-        </div>
-      );
-
-      const ApiKeyModal = ({ onSave }) => {
-        const [key, setKey] = useState('');
-        
-        return (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-                <div className="flex items-center gap-3 mb-4 text-teal-600">
-                   <KeyRound size={28} />
-                   <h2 className="text-xl font-bold">Setup API Key</h2>
-                </div>
-                <p className="text-slate-500 text-sm mb-4">
-                  To use CantoLearn, you need a free Google Gemini API Key. 
-                  The key is stored locally in your browser.
-                </p>
-                <input 
-                  type="password" 
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder="Paste your API Key here (starts with AIza...)"
-                  className="w-full p-3 border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                />
-                <div className="flex gap-2 justify-end">
-                   <a href="https://aistudio.google.com/app/apikey" target="_blank" className="px-4 py-2 text-sm text-teal-600 font-medium hover:bg-teal-50 rounded-lg">Get Key</a>
-                   <button 
-                     disabled={!key}
-                     onClick={() => onSave(key)}
-                     className="px-4 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50"
-                   >
-                     Save & Start
-                   </button>
-                </div>
-             </div>
-          </div>
-        );
-      };
-
-      // --- MAIN APP ---
-
-      const App = () => {
-        const [view, setView] = useState('TRANSLATE'); // 'TRANSLATE' | 'HISTORY'
-        const [inputText, setInputText] = useState('');
-        const [loading, setLoading] = useState(false);
-        const [currentResults, setCurrentResults] = useState(null);
-        const [historyItems, setHistoryItems] = useState([]);
-        const [historySearch, setHistorySearch] = useState('');
-        const [error, setError] = useState(null);
-        const [apiKey, setApiKey] = useState(null);
-
-        // Modal State
-        const [isModalOpen, setIsModalOpen] = useState(false);
-        const [modalLoading, setModalLoading] = useState(false);
-        const [selectedWord, setSelectedWord] = useState('');
-        const [suggestions, setSuggestions] = useState([]);
-        const [targetRecordId, setTargetRecordId] = useState(null);
-
-        useEffect(() => {
-          // Check for API Key
-          const storedKey = localStorage.getItem(STORAGE_KEY_API);
-          if (storedKey) setApiKey(storedKey);
-
-          // Load History
-          const storedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
-          if (storedHistory) {
-            try { setHistoryItems(JSON.parse(storedHistory)); } catch(e) {}
-          }
-          
-          // Remove loading fallback
-          const loader = document.getElementById('loading-fallback');
-          if(loader) loader.style.display = 'none';
-        }, []);
-
-        const saveApiKey = (key) => {
-          localStorage.setItem(STORAGE_KEY_API, key);
-          setApiKey(key);
+    <script>
+        // Global Error Handler to show startup issues
+        window.onerror = function(msg, url, line, col, error) {
+            const loader = document.getElementById('loading-fallback');
+            const errDisplay = document.getElementById('error-display');
+            if(loader && errDisplay) {
+                const cleanMsg = msg.replace('Uncaught Error: ', '');
+                errDisplay.innerText = `Error: ${cleanMsg}\nLine: ${line}`;
+                errDisplay.classList.remove('hidden');
+                // Stop the spinner
+                loader.querySelector('.animate-spin').style.display = 'none';
+            }
         };
-
-        const updateHistoryStorage = (items) => {
-          setHistoryItems(items);
-          localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(items.slice(0, 50)));
-        };
-
-        const handleTranslate = async () => {
-          if (!inputText.trim()) return;
-          setLoading(true);
-          setError(null);
-          setCurrentResults(null);
-
-          try {
-            const items = await translateToCantonese(inputText, apiKey);
-            setCurrentResults(items);
-            
-            const newRecord = {
-              id: crypto.randomUUID(),
-              originalText: inputText,
-              results: items,
-              timestamp: Date.now(),
-            };
-            updateHistoryStorage([newRecord, ...historyItems]);
-          } catch (err) {
-            setError(err.message || "Translation failed");
-          } finally {
-            setLoading(false);
-          }
-        };
-
-        const handleCardClick = async (word, recordId = null) => {
-          setSelectedWord(word);
-          setTargetRecordId(recordId);
-          setIsModalOpen(true);
-          setModalLoading(true);
-          setSuggestions([]);
-          try {
-            const results = await getColloquialSuggestions(word, apiKey);
-            setSuggestions(results);
-          } catch (err) { console.error(err); } 
-          finally { setModalLoading(false); }
-        };
-
-        const handleAddSuggestion = (suggestion) => {
-          const newItem = { text: suggestion.text, jyutping: suggestion.jyutping, partOfSpeech: 'Colloquial' };
-          
-          if (view === 'TRANSLATE' && currentResults) {
-            setCurrentResults([...currentResults, newItem]);
-          } else if (view === 'HISTORY' && targetRecordId) {
-            const updated = historyItems.map(rec => {
-              if (rec.id === targetRecordId) return { ...rec, results: [...rec.results, newItem] };
-              return rec;
-            });
-            updateHistoryStorage(updated);
-          }
-          setIsModalOpen(false);
-        };
-
-        const filteredHistory = historyItems.filter(item => {
-          const q = historySearch.toLowerCase().trim();
-          if (!q) return true;
-          const dateStr = new Date(item.timestamp).toLocaleDateString();
-          return item.originalText.toLowerCase().includes(q) || dateStr.includes(q);
-        });
-
-        if (!apiKey) return <ApiKeyModal onSave={saveApiKey} />;
-
-        return (
-          <div className="min-h-screen bg-slate-50 flex flex-col relative pb-20">
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-              <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center text-white font-chinese font-bold text-lg">粵</div>
-                  <h1 className="font-bold text-slate-800 text-lg">CantoLearn</h1>
-                </div>
-                <nav className="flex bg-slate-100 p-1 rounded-lg">
-                  <button onClick={() => setView('TRANSLATE')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'TRANSLATE' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>Translate</button>
-                  <button onClick={() => setView('HISTORY')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'HISTORY' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>History</button>
-                </nav>
-              </div>
-            </header>
-
-            <main className="flex-1 max-w-3xl w-full mx-auto p-4 md:p-6">
-              {view === 'TRANSLATE' && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-1">
-                    <textarea 
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      placeholder="Enter Chinese text (e.g. 食飯)..."
-                      className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none focus:ring-0 placeholder:text-slate-300 font-chinese text-slate-700"
-                    />
-                    <div className="flex justify-between items-center px-4 pb-4">
-                      <div className="text-xs text-slate-400"><span className="bg-slate-100 px-2 py-1 rounded">Tip</span> Use spaces to separate words</div>
-                      <button onClick={handleTranslate} disabled={loading || !inputText.trim()} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-md disabled:opacity-50">
-                        {loading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />} Translate
-                      </button>
-                    </div>
-                  </div>
-
-                  {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm text-center">{error}</div>}
-
-                  {currentResults && (
-                    <div className="space-y-4">
-                       {currentResults.length === 0 ? <div className="text-center text-slate-400">No results.</div> : 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {currentResults.map((item, i) => <ResultCard key={i} item={item} onClick={() => handleCardClick(item.text)} />)}
-                        </div>
-                       }
-                    </div>
-                  )}
-                  {!currentResults && !loading && (
-                    <div className="text-center py-20 opacity-50">
-                      <Search size={32} className="mx-auto mb-4 text-slate-300" />
-                      <h3 className="text-slate-500">Enter text to start</h3>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {view === 'HISTORY' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                   <div className="relative">
-                      <Search size={16} className="absolute left-3 top-3 text-slate-400" />
-                      <input type="text" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search history..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500" />
-                   </div>
-                   
-                   <div className="space-y-4">
-                      {filteredHistory.length === 0 ? <div className="text-center py-10 text-slate-400">No history found.</div> :
-                        filteredHistory.map(rec => (
-                          <div key={rec.id} className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 group">
-                             <div className="flex justify-between mb-3">
-                                <div>
-                                  <p className="text-xs text-slate-400">{new Date(rec.timestamp).toLocaleString()}</p>
-                                  <h3 className="text-lg font-chinese font-medium">{rec.originalText}</h3>
-                                </div>
-                                <button onClick={() => updateHistoryStorage(historyItems.filter(h => h.id !== rec.id))} className="text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
-                             </div>
-                             <div className="flex flex-wrap gap-2">
-                                {rec.results.map((item, idx) => (
-                                  <div key={idx} onClick={() => handleCardClick(item.text, rec.id)} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200 cursor-pointer hover:border-teal-300">
-                                     <span className="font-chinese text-slate-700">{item.text}</span>
-                                     <span className="text-xs text-teal-600 font-bold">{item.jyutping}</span>
-                                  </div>
-                                ))}
-                             </div>
-                          </div>
-                        ))
-                      }
-                   </div>
-                </div>
-              )}
-            </main>
-
-            {isModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-                <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 relative overflow-hidden animate-in zoom-in-95">
-                  <button onClick={() => setIsModalOpen(false)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"><X size={20}/></button>
-                  <h3 className="text-lg font-bold text-slate-800 mb-1">Local Expressions</h3>
-                  <p className="text-sm text-slate-500 mb-4">Colloquial ways to say "{selectedWord}"</p>
-                  
-                  {modalLoading ? <div className="py-8 flex justify-center text-teal-600"><Loader2 className="animate-spin" /></div> : 
-                   suggestions.length === 0 ? <div className="py-6 text-center text-slate-400 text-sm">No suggestions found.</div> :
-                   <div className="space-y-3">
-                     {suggestions.map((s, i) => (
-                       <div key={i} className="flex justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-                         <div>
-                            <div className="flex items-baseline gap-2"><span className="font-bold text-slate-800">{s.text}</span><span className="text-sm text-teal-600">{s.jyutping}</span></div>
-                            <p className="text-xs text-slate-500">{s.explanation}</p>
-                         </div>
-                         <div className="flex gap-1">
-                            <div className="scale-75"><AudioButton text={s.text} /></div>
-                            <button onClick={() => handleAddSuggestion(s)} className="text-teal-700 hover:bg-teal-200 p-2 rounded-full"><Plus size={18}/></button>
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                  }
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      };
-
-      const root = createRoot(document.getElementById('root'));
-      root.render(<App />);
     </script>
-  </body>
+
+    <!-- MAIN APPLICATION LOGIC -->
+    <!-- type="text/babel" tells Babel to compile this. data-type="module" allows imports. -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { GoogleGenAI } from '@google/genai';
+        import { BookOpen, History, Sparkles, Trash2, Search, Loader2, X, Plus, Volume2, KeyRound, AlertCircle } from 'lucide-react';
+
+        // --- CONSTANTS ---
+        const STORAGE_KEY_HISTORY = "cantolearn_history_v1";
+        const STORAGE_KEY_API = "cantolearn_api_key";
+
+        // --- GEMINI SERVICE ---
+        
+        const getAiClient = (apiKey) => {
+            return new GoogleGenAI({ apiKey: apiKey });
+        };
+
+        const translateToCantonese = async (inputText, apiKey) => {
+            try {
+                const ai = getAiClient(apiKey);
+                const prompt = `
+                    You are a Cantonese language expert. Analyze input: "${inputText}".
+                    
+                    Rules:
+                    1. If spaces exist (e.g. "食飯 瞓覺"), treat each space-separated segment as ONE vocabulary item.
+                    2. If no spaces (e.g. "身體健康"), treat the continuous string as ONE item unless it's a very long sentence.
+                    3. Keep meaningful words (Nouns, Verbs, Adj, Idioms). Remove pure grammatical particles if in a long sentence.
+                    4. Output Traditional Chinese and LSHK Jyutping.
+                    
+                    Return JSON matching this schema:
+                    {
+                      "items": [
+                        { "text": "Traditional Chinese", "jyutping": "gwong2 dung1 waa2", "partOfSpeech": "Noun/Verb/etc" }
+                      ]
+                    }
+                `;
+
+                const response = await ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        temperature: 0.1, 
+                    },
+                });
+
+                const jsonText = response.text;
+                const parsed = JSON.parse(jsonText);
+                return parsed.items || [];
+            } catch (error) {
+                console.error("Translation Error:", error);
+                throw new Error("Failed to translate. Check your API Key or internet.");
+            }
+        };
+
+        const getColloquialSuggestions = async (word, apiKey) => {
+            try {
+                const ai = getAiClient(apiKey);
+                const prompt = `
+                    User selected: "${word}".
+                    Provide 2-3 **Hong Kong colloquial Cantonese** synonyms/slang.
+                    E.g. Input "冰淇淋" -> Output "雪糕". Input "吃飯" -> Output "食飯", "食嘢".
+                    
+                    Return JSON:
+                    {
+                      "suggestions": [
+                        { "text": "Colloquial Word", "jyutping": "ping1 yam1", "explanation": "Brief meaning" }
+                      ]
+                    }
+                `;
+
+                const response = await ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: prompt,
+                    config: {
+                        responseMimeType: "application/json",
+                        temperature: 0.4,
+                    },
+                });
+
+                const jsonText = response.text;
+                const parsed = JSON.parse(jsonText);
+                return parsed.suggestions || [];
+            } catch (error) {
+                console.error("Suggestion Error:", error);
+                return [];
+            }
+        };
+
+        // --- COMPONENTS ---
+
+        const AudioButton = ({ text }) => {
+            const [isPlaying, setIsPlaying] = useState(false);
+
+            const handlePlay = useCallback((e) => {
+                e.stopPropagation();
+                if (!window.speechSynthesis) {
+                    alert("Browser doesn't support TTS.");
+                    return;
+                }
+                window.speechSynthesis.cancel();
+                // Try to find a Cantonese voice, fallback to Chinese
+                const voices = window.speechSynthesis.getVoices();
+                const hkVoice = voices.find(v => v.lang === 'zh-HK') || voices.find(v => v.lang.startsWith('zh'));
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                if (hkVoice) utterance.voice = hkVoice;
+                utterance.lang = 'zh-HK'; 
+                utterance.rate = 0.8;
+                utterance.onstart = () => setIsPlaying(true);
+                utterance.onend = () => setIsPlaying(false);
+                utterance.onerror = () => setIsPlaying(false);
+                window.speechSynthesis.speak(utterance);
+            }, [text]);
+
+            return (
+                <button onClick={handlePlay} className={`p-1.5 rounded-full transition-colors ${isPlaying ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100 hover:text-teal-600'}`}>
+                    <Volume2 size={18} />
+                </button>
+            );
+        };
+
+        const ResultCard = ({ item, onClick }) => (
+            <div 
+                onClick={onClick}
+                className={`bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center justify-center relative transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md hover:border-teal-200 hover:-translate-y-0.5' : ''}`}
+            >
+                <div className="absolute top-2 right-2"><AudioButton text={item.text} /></div>
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{item.partOfSpeech}</div>
+                <div className="text-3xl font-chinese font-medium text-slate-800 mb-1 text-center">{item.text}</div>
+                <div className="text-lg font-medium text-teal-600 font-sans tracking-tight">{item.jyutping}</div>
+            </div>
+        );
+
+        const ApiKeyModal = ({ onSave }) => {
+            const [key, setKey] = useState('');
+            
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+                     <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95">
+                        <div className="flex items-center gap-3 mb-4 text-teal-600">
+                           <KeyRound size={28} />
+                           <h2 className="text-xl font-bold">Setup API Key</h2>
+                        </div>
+                        <p className="text-slate-500 text-sm mb-4">
+                            To use CantoLearn, you need a <strong>Google Gemini API Key</strong>.
+                            It's free and the key is stored securely in your browser.
+                        </p>
+                        <input 
+                            type="password" 
+                            value={key}
+                            onChange={(e) => setKey(e.target.value)}
+                            placeholder="Paste API Key (starts with AIza...)"
+                            className="w-full p-3 border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 focus:outline-none font-mono text-sm"
+                        />
+                        <div className="flex gap-2 justify-end">
+                           <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="px-4 py-2 text-sm text-teal-600 font-medium hover:bg-teal-50 rounded-lg flex items-center">Get Key</a>
+                           <button 
+                               disabled={!key}
+                               onClick={() => onSave(key)}
+                               className="px-4 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                           >
+                               Save & Start
+                           </button>
+                        </div>
+                     </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+
+        const App = () => {
+            const [view, setView] = useState('TRANSLATE'); // 'TRANSLATE' | 'HISTORY'
+            const [inputText, setInputText] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [currentResults, setCurrentResults] = useState(null);
+            const [historyItems, setHistoryItems] = useState([]);
+            const [historySearch, setHistorySearch] = useState('');
+            const [error, setError] = useState(null);
+            const [apiKey, setApiKey] = useState(null);
+
+            // Modal State
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [modalLoading, setModalLoading] = useState(false);
+            const [selectedWord, setSelectedWord] = useState('');
+            const [suggestions, setSuggestions] = useState([]);
+            const [targetRecordId, setTargetRecordId] = useState(null);
+
+            useEffect(() => {
+                // Initialize
+                const storedKey = localStorage.getItem(STORAGE_KEY_API);
+                if (storedKey) setApiKey(storedKey);
+
+                const storedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
+                if (storedHistory) {
+                    try { setHistoryItems(JSON.parse(storedHistory)); } catch(e) {}
+                }
+
+                // Remove loading screen once React mounts
+                const loader = document.getElementById('loading-fallback');
+                if(loader) loader.style.display = 'none';
+            }, []);
+
+            const updateHistoryStorage = (items) => {
+                setHistoryItems(items);
+                localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(items.slice(0, 50)));
+            };
+
+            const handleTranslate = async () => {
+                if (!inputText.trim()) return;
+                setLoading(true);
+                setError(null);
+                setCurrentResults(null);
+
+                try {
+                    const items = await translateToCantonese(inputText, apiKey);
+                    setCurrentResults(items);
+                    
+                    const newRecord = {
+                        id: crypto.randomUUID(),
+                        originalText: inputText,
+                        results: items,
+                        timestamp: Date.now(),
+                    };
+                    updateHistoryStorage([newRecord, ...historyItems]);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleCardClick = async (word, recordId = null) => {
+                setSelectedWord(word);
+                setTargetRecordId(recordId);
+                setIsModalOpen(true);
+                setModalLoading(true);
+                setSuggestions([]);
+                try {
+                    const results = await getColloquialSuggestions(word, apiKey);
+                    setSuggestions(results);
+                } catch (err) { console.error(err); } 
+                finally { setModalLoading(false); }
+            };
+
+            const handleAddSuggestion = (suggestion) => {
+                const newItem = { text: suggestion.text, jyutping: suggestion.jyutping, partOfSpeech: 'Colloquial' };
+                
+                if (view === 'TRANSLATE' && currentResults) {
+                    setCurrentResults([...currentResults, newItem]);
+                } else if (view === 'HISTORY' && targetRecordId) {
+                    const updated = historyItems.map(rec => {
+                        if (rec.id === targetRecordId) return { ...rec, results: [...rec.results, newItem] };
+                        return rec;
+                    });
+                    updateHistoryStorage(updated);
+                }
+                setIsModalOpen(false);
+            };
+
+            // Formatting
+            const formatDate = (ts) => new Date(ts).toLocaleDateString('en-HK', { month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' });
+
+            const filteredHistory = historyItems.filter(item => {
+                const q = historySearch.toLowerCase().trim();
+                if (!q) return true;
+                const dateStr = formatDate(item.timestamp).toLowerCase();
+                return item.originalText.toLowerCase().includes(q) || dateStr.includes(q);
+            });
+
+            if (!apiKey) return <ApiKeyModal onSave={(key) => { localStorage.setItem(STORAGE_KEY_API, key); setApiKey(key); }} />;
+
+            return (
+                <div className="min-h-screen bg-slate-50 flex flex-col relative pb-20 fade-in">
+                    {/* Header */}
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+                        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('TRANSLATE')}>
+                                <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center text-white font-chinese font-bold text-lg">粵</div>
+                                <h1 className="font-bold text-slate-800 text-lg hidden sm:block">CantoLearn</h1>
+                            </div>
+                            <nav className="flex bg-slate-100 p-1 rounded-lg">
+                                <button onClick={() => setView('TRANSLATE')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'TRANSLATE' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>Translate</button>
+                                <button onClick={() => setView('HISTORY')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'HISTORY' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>History</button>
+                            </nav>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 max-w-3xl w-full mx-auto p-4 md:p-6">
+                        {view === 'TRANSLATE' && (
+                            <div className="space-y-8">
+                                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-1 group focus-within:ring-2 ring-teal-500/20 transition-all">
+                                    <textarea 
+                                        value={inputText}
+                                        onChange={(e) => setInputText(e.target.value)}
+                                        placeholder="Enter Chinese text (e.g. 食飯) or space separated words..."
+                                        className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none focus:ring-0 placeholder:text-slate-300 font-chinese text-slate-700"
+                                    />
+                                    <div className="flex justify-between items-center px-4 pb-4">
+                                        <div className="text-xs text-slate-400 hidden sm:block"><span className="bg-slate-100 px-2 py-1 rounded">Tip</span> Use spaces to separate words</div>
+                                        <button onClick={handleTranslate} disabled={loading || !inputText.trim()} className="ml-auto bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed active:scale-95">
+                                            {loading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />} Translate
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {error && (
+                                    <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm text-center flex items-center justify-center gap-2">
+                                        <AlertCircle size={18} /> {error}
+                                    </div>
+                                )}
+
+                                {currentResults && (
+                                    <div className="space-y-4 fade-in">
+                                       <div className="flex items-center justify-between px-1">
+                                            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Vocabulary</h3>
+                                            <span className="text-xs text-teal-600">Click cards for slang</span>
+                                       </div>
+                                       {currentResults.length === 0 ? <div className="text-center text-slate-400 py-8 border border-dashed rounded-xl">No results found.</div> : 
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                            {currentResults.map((item, i) => <ResultCard key={i} item={item} onClick={() => handleCardClick(item.text)} />)}
+                                        </div>
+                                       }
+                                    </div>
+                                )}
+                                {!currentResults && !loading && (
+                                    <div className="text-center py-20 opacity-50">
+                                        <Search size={32} className="mx-auto mb-4 text-slate-300" />
+                                        <h3 className="text-slate-500 font-medium">Enter text to start learning</h3>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {view === 'HISTORY' && (
+                            <div className="space-y-6 fade-in">
+                               <div className="relative">
+                                    <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+                                    <input type="text" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search history..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all" />
+                               </div>
+                               
+                               <div className="space-y-4">
+                                    {filteredHistory.length === 0 ? <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl">No history found.</div> :
+                                        filteredHistory.map(rec => (
+                                            <div key={rec.id} className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 group transition-all hover:shadow-md">
+                                                 <div className="flex justify-between items-start mb-3">
+                                                      <div>
+                                                          <p className="text-xs text-slate-400 mb-1">{formatDate(rec.timestamp)}</p>
+                                                          <h3 className="text-lg font-chinese font-medium text-slate-800">{rec.originalText}</h3>
+                                                      </div>
+                                                      <button onClick={() => updateHistoryStorage(historyItems.filter(h => h.id !== rec.id))} className="text-slate-300 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                          <Trash2 size={16}/>
+                                                      </button>
+                                                 </div>
+                                                 <div className="flex flex-wrap gap-2">
+                                                      {rec.results.map((item, idx) => (
+                                                          <div key={idx} onClick={() => handleCardClick(item.text, rec.id)} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200 cursor-pointer hover:border-teal-300 hover:bg-teal-50 transition-colors">
+                                                               <span className="font-chinese text-slate-700">{item.text}</span>
+                                                               <span className="text-xs text-teal-600 font-bold">{item.jyutping}</span>
+                                                          </div>
+                                                      ))}
+                                                 </div>
+                                            </div>
+                                        ))
+                                    }
+                               </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* SUGGESTION MODAL */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+                            <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 relative overflow-hidden animate-in zoom-in-95">
+                                <button onClick={() => setIsModalOpen(false)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"><X size={20}/></button>
+                                <h3 className="text-lg font-bold text-slate-800 mb-1">Local Expressions</h3>
+                                <p className="text-sm text-slate-500 mb-4">Colloquial ways to say "{selectedWord}"</p>
+                                
+                                {modalLoading ? <div className="py-8 flex justify-center text-teal-600"><Loader2 className="animate-spin" /></div> : 
+                                 suggestions.length === 0 ? <div className="py-6 text-center text-slate-400 text-sm">No suggestions found.</div> :
+                                 <div className="space-y-3">
+                                     {suggestions.map((s, i) => (
+                                         <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                             <div>
+                                                  <div className="flex items-baseline gap-2"><span className="font-bold text-slate-800 text-lg">{s.text}</span><span className="text-sm text-teal-600 font-medium">{s.jyutping}</span></div>
+                                                  <p className="text-xs text-slate-500">{s.explanation}</p>
+                                             </div>
+                                             <div className="flex gap-1">
+                                                  <div className="scale-75"><AudioButton text={s.text} /></div>
+                                                  <button onClick={() => handleAddSuggestion(s)} className="text-teal-700 hover:bg-teal-200 p-2 rounded-full transition-colors"><Plus size={18}/></button>
+                                             </div>
+                                         </div>
+                                     ))}
+                                 </div>
+                                }
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
 </html>
