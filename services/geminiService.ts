@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TranslationItem, SuggestionItem } from "../types";
 
+// In Vite, we define process.env.API_KEY in the vite.config.ts, so this remains valid.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const translationSchema: Schema = {
