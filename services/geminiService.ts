@@ -50,14 +50,13 @@ export const translateToCantonese = async (inputText: string): Promise<Translati
       Input Text: "${inputText}"
 
       Rules:
-      1. **Word Segmentation**:
-         - If the input contains spaces (e.g., "apple banana"), treat each segment as a separate word.
-         - If the input is a continuous sentence (e.g., "我今天想去圖書館"), analyze it morphologically. 
-         
-      2. **Filtering (Intelligent Extraction)**:
-         - If it is a sentence, **REMOVE** grammatical particles, prepositions, and structural markers (like 的, 了, 著, 嗎, 呢). 
-         - **KEEP** only significant content words: Nouns, Verbs, Adjectives, Adverbs, and Idioms.
-         - If the input was already a space-separated list, keep all items.
+      1. **Segmentation Strategy**:
+         - **Respect User Spacing**: If the input text is separated by spaces (e.g., "食飯 瞓覺"), treat each space-separated segment as a distinct, single vocabulary item. Do NOT break these segments down further.
+         - **No Spaces**: If the input is a continuous string without spaces (e.g., "身體健康"), treat the **entire string** as one single vocabulary item/phrase. Do not segment it into component words unless it is clearly a long, complex sentence structure. Prioritize keeping it as one unit.
+
+      2. **Content Handling**:
+         - **Keep** significant content words (Nouns, Verbs, Adjectives, Idioms).
+         - **Remove** only grammatical particles (like 嗎, 呢) if they appear in a long sentence context, but preserve them if they are part of a specific phrase the user typed.
 
       3. **Output Format**:
          - Convert the retained words to **Traditional Chinese**.
