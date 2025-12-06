@@ -322,7 +322,7 @@
                                         <div className="flex flex-wrap gap-2">
                                             {h.results.map((r, idx) => (
                                                 <span key={idx} className="text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 text-slate-600">
-                                                    {r.text} <span className="text-teal-600 font-mono">{r.jyutping}</span>
+                                                    {r.text} <span className="text-teal-600 font-mono">{r.jyutping}<AudioButton text={item.text} /></span>
                                                 </span>
                                             ))}
                                         </div>
