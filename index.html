@@ -168,9 +168,23 @@
 
     const prompt = \`
 
-      You are a Cantonese teacher. Translate "${inputText}" to Traditional Chinese and LSHK Jyutping.
+      You are a Cantonese language expert and teacher. 
+      Your task is to analyze the user's input text and convert it into a structured format for learning.
+       Input Text: "${inputText}"
+      Rules:
+      1. **Segmentation Strategy**:
+         - **Respect User Spacing**: If the input text is separated by spaces (e.g., "食飯 瞓覺"), treat each space-separated segment as a distinct, single vocabulary item. Do NOT break these segments down further.
+         - **No Spaces**: If the input is a continuous string without spaces (e.g., "身體健康"), treat the **entire string** as one single vocabulary item/phrase. Do not segment it into component words unless it is clearly a long, complex sentence structure. Prioritize keeping it as one unit.
 
-      Rules: Split text into meaningful words.
+      2. **Content Handling**:
+         - **Keep** significant content words (Nouns, Verbs, Adjectives, Idioms).
+         - **Remove** only grammatical particles (like 嗎, 呢) if they appear in a long sentence context, but preserve them if they are part of a specific phrase the user typed.
+
+      3. **Output Format**:
+         - Convert the retained words to **Traditional Chinese**.
+         - Provide the **LSHK Jyutping** (Hong Kong Linguistic Society) romanization with tone numbers.
+         - Return the result as a JSON object matching the schema.
+    `
 
       Output strictly JSON Array: \[{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}\]
 
