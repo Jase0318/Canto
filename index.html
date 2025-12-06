@@ -126,7 +126,7 @@
               If input is "吃飯" (Eat rice/Have a meal), output "食飯" (Standard spoken) and "食嘢" (Eat something).
               If input is "冰淇淋" (Ice cream), output "雪糕".
               If input is "老師" (Teacher), output "阿Sir" or "Miss" (if common context applies) or just return the same if it is already natural.
-          Output strictly JSON Array.
+          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]
         `;
         try {
             const result = await callGeminiApi(apiKey, prompt);
