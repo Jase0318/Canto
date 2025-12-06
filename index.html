@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CantoLearn AI - 粵語學習助手 (Pro版)</title>
+    <title>CantoLearn AI - 粵語學習助手 (Pro穩定版)</title>
     
-    <!-- 1. Tailwind CSS -->
+    <!-- 1. 樣式 -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. React & ReactDOM -->
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    
-    <!-- 3. Babel -->
+    <!-- 2. 核心函式庫 (使用 Cloudflare CDN，最穩定) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -40,137 +38,59 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
 
-    <div id="root"></div>
-    
-    <!-- 載入畫面 -->
-    <div id="loading-fallback" class="fixed inset-0 flex items-center justify-center flex-col gap-3 text-slate-400 bg-slate-50 z-50">
-      <div class="w-10 h-10 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin"></div>
-      <div id="loading-text" class="text-sm font-medium tracking-wide">正在啟動 CantoLearn AI...</div>
+    <!-- 系統狀態監控 (純 JS，保證執行) -->
+    <div id="loading-screen" class="fixed inset-0 flex items-center justify-center flex-col gap-4 bg-slate-50 z-[9999] transition-opacity duration-500">
+        <div class="w-12 h-12 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin"></div>
+        <div class="text-center">
+            <div class="font-bold text-slate-700 text-lg">系統啟動中...</div>
+            <div id="debug-text" class="text-xs text-slate-400 mt-2 font-mono">Loading Core Libraries...</div>
+        </div>
+        <button id="retry-btn" onclick="window.location.reload()" class="hidden px-4 py-2 bg-red-500 text-white rounded shadow text-sm hover:bg-red-600">
+            重新整理
+        </button>
     </div>
 
-    <!-- 應用程式邏輯 -->
-    <script type="text/babel">
-      // 超時偵測
-      setTimeout(() => {
-        const loader = document.getElementById('loading-fallback');
-        if (loader && loader.style.display !== 'none') {
-           document.getElementById('loading-text').innerHTML = '<span class="text-red-500">啟動過久，請嘗試強制重新整理 (Ctrl+F5)。</span>';
-        }
-      }, 8000);
+    <script>
+        // 安全檢查：如果 5 秒後 Loading 還在，代表 React 掛了
+        setTimeout(() => {
+            const loader = document.getElementById('loading-screen');
+            const debug = document.getElementById('debug-text');
+            if (loader && loader.style.display !== 'none') {
+                debug.innerHTML = '⚠️ 啟動逾時。<br>可能原因：CDN 連線被擋或是舊緩存。<br>請按 Ctrl+F5 強制重整。';
+                debug.style.color = 'red';
+                document.getElementById('retry-btn').classList.remove('hidden');
+            }
+        }, 6000);
 
-      const { useState, useEffect, useMemo } = React;
-
-      // --- 圖示元件 ---
-      const Icons = {
-        Sparkles: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
-        Search: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
-        Trash2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
-        X: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
-        Volume2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>,
-        KeyRound: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>,
-        Loader2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-        Plus: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
-        Book: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-      };
-
-      // --- API 呼叫 (不修改模型名稱) ---
-      const callGeminiApi = async (apiKey, prompt) => {
-        // 保留使用者要求的 gemini-2.5-flash
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-        
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: "application/json" }
-          })
-        });
-
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error?.message || `API 錯誤 (${response.status})`);
-        }
-
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error("API 回傳格式不如預期");
-        return JSON.parse(text);
-      };
-
-      const translateToCantonese = async (inputText, apiKey) => {
-        // 升級版 Prompt：支援單詞不拆分、長句去介系詞
-        const prompt = `
-          You are a Cantonese language expert.
-          Task: Translate "${inputText}" to Traditional Chinese and LSHK Jyutping.
-          
-          Rules:
-          1. If the input is a **Single Word** (no spaces, short length), do NOT split it. Return it as one item.
-          2. If the input is a **Sentence** or **Continuous Text**:
-             - FILTER OUT particles, prepositions, and stop words (e.g., 的, 了, 嗎, is, a, the).
-             - KEEP ONLY meaningful words: Nouns, Verbs, Adjectives, Idioms.
-          
-          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]
-        `;
-        return await callGeminiApi(apiKey, prompt);
-      };
-
-      const getColloquialSuggestions = async (word, apiKey) => {
-        const prompt = `
-          Cantonese Learning. Word: "${word}".
-          Give 2-3 Hong Kong colloquial/slang alternatives.
-          Example: "冰淇淋" -> [{"text": "雪糕", "jyutping": "syut3 gou1", "explanation": "Common term"}]
-          Output strictly JSON Array.
-        `;
-        try {
-            const result = await callGeminiApi(apiKey, prompt);
-            return result.suggestions || result;
-        } catch (e) {
-            return [];
-        }
-      };
-
-      // --- 元件 ---
-      const AudioButton = ({ text }) => {
-        const [isPlaying, setIsPlaying] = useState(false);
-        const handlePlay = (e) => {
-            e.stopPropagation();
-            window.speechSynthesis.cancel();
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'zh-HK'; u.rate = 0.85;
-            u.onstart = () => setIsPlaying(true);
-            u.onend = () => setIsPlaying(false);
-            window.speechSynthesis.speak(u);
+        window.onerror = function(msg, url, line) {
+            const debug = document.getElementById('debug-text');
+            debug.innerHTML = `錯誤: ${msg} (Line: ${line})`;
+            debug.style.color = 'red';
+            return false;
         };
-        return (
-            <button onClick={handlePlay} className={`p-1.5 rounded-full transition ${isPlaying ? 'text-teal-600 bg-teal-50' : 'text-slate-300 hover:text-teal-500 hover:bg-slate-100'}`}>
-                <Icons.Volume2 className="w-4 h-4" />
-            </button>
-        );
-      };
+    </script>
 
-      const ResultCard = ({ item, onClick }) => (
-        <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center relative transition hover:shadow-md hover:-translate-y-1 cursor-pointer group">
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition"><AudioButton text={item.text} /></div>
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{item.partOfSpeech}</span>
-          <div className="text-2xl md:text-3xl font-chinese font-medium text-slate-800 mb-1 text-center">{item.text}</div>
-          <div className="text-sm md:text-base font-medium text-teal-600 font-mono bg-teal-50 px-2 py-0.5 rounded">{item.jyutping}</div>
-        </div>
-      );
+    <!-- React 掛載點 -->
+    <div id="root"></div>
 
-      const ApiKeyModal = ({ onSave }) => {
-        const [key, setKey] = useState('');
-        return (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-                <div className="flex items-center gap-3 mb-4 text-teal-600">
-                   <Icons.KeyRound className="w-7 h-7" />
-                   <h2 className="text-xl font-bold">API Key 設定</h2>
-                </div>
-                <input type="password" value={key} onChange={e => setKey(e.target.value)} placeholder="貼上 API Key (AIza...)" className="w-full p-3 border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 outline-none" />
-                <div className="flex justify-end gap-2">
-                   <a href="https://aistudio.google.com/app/apikey" target="_blank" className="px-4 py-2 text-sm text-teal-600 font-medium hover:bg-teal-50 rounded-lg">取得 Key</a>
-                   <button disabled={!key} onClick={() => onSave(key)} className="px-5 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50 transition">開始使用</button>
-                </div>
-             </div>
-   
+    <!-- 主程式邏輯 -->
+    <script type="text/babel">
+        // React 啟動後，立刻移除 Loading 畫面
+        try {
+            const loader = document.getElementById('loading-screen');
+            if(loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => loader.style.display = 'none', 500);
+            }
+        } catch(e) { console.error(e); }
+
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 圖示元件 ---
+        const Icons = {
+            Sparkles: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
+            Search: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+            Trash2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+            X: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            Volume2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>,
+            KeyRound: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentC
