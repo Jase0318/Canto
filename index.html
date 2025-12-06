@@ -1,30 +1,22 @@
 <!DOCTYPE html>
 <html lang="zh-HK">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CantoLearn AI - 粵語學習助手</title>
     
-    <!-- 1. Tailwind CSS (樣式庫) -->
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Google Fonts (字體) -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- 2. React & ReactDOM (使用最穩定的 UMD 版本) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- 3. Babel (讓瀏覽器看懂 React) -->
+    <!-- 3. Babel (編譯器) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. Import Maps (關鍵修復：移除 aistudiocdn，改用 esm.sh) -->
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "@google/genai": "https://esm.sh/@google/genai@0.1.1",
-        "lucide-react": "https://esm.sh/lucide-react@0.344.0"
-      }
-    }
-    </script>
+    <!-- 字體 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 
     <script>
       tailwind.config = {
@@ -35,225 +27,145 @@
               chinese: ['Noto Sans TC', 'sans-serif'],
             },
             colors: {
-              teal: {
-                50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4',
-                400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e',
-                900: '#134e4a',
-              }
+              teal: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6', 600: '#0d9488', 700: '#0f766e' }
             }
           }
         }
       }
     </script>
     <style>
-      /* 防止 React 載入前的閃爍 */
-      #root:empty { display: none; }
       body { background-color: #f8fafc; }
-      /* 載入動畫 */
-      .fade-in { animation: fadeIn 0.5s ease-in; }
-      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      /* 隱藏未編譯的內容 */
+      #root:empty { display: none; }
     </style>
-  </head>
-  <body class="bg-slate-50 text-slate-900 font-sans antialiased selection:bg-teal-100 selection:text-teal-900">
-    
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased">
+
     <div id="root"></div>
     
-    <!-- 載入中的替代畫面 -->
-    <div id="loading-fallback" class="fixed inset-0 flex items-center justify-center flex-col gap-3 text-slate-400">
-      <div class="w-8 h-8 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin"></div>
-      <div class="text-sm font-medium">正在啟動 CantoLearn AI...</div>
+    <!-- 載入畫面 -->
+    <div id="loading-fallback" class="fixed inset-0 flex items-center justify-center flex-col gap-3 text-slate-400 bg-slate-50 z-50">
+      <div class="w-10 h-10 border-4 border-teal-200 border-t-teal-600 rounded-full animate-spin"></div>
+      <div id="loading-text" class="text-sm font-medium tracking-wide">正在啟動 CantoLearn AI...</div>
     </div>
 
-    <!-- 主程式邏輯 -->
-    <script type="text/babel" data-type="module">
-      import React, { useState, useEffect, useCallback } from 'react';
-      import { createRoot } from 'react-dom/client';
-      import { GoogleGenAI } from '@google/genai';
-      import { BookOpen, History, Sparkles, Trash2, Search, Loader2, X, Plus, Volume2, KeyRound } from 'lucide-react';
+    <!-- 應用程式邏輯 -->
+    <script type="text/babel">
+      // 設定超時偵測：如果 5 秒還沒載入 React，顯示錯誤訊息
+      setTimeout(() => {
+        const loader = document.getElementById('loading-fallback');
+        if (loader && loader.style.display !== 'none') {
+           document.getElementById('loading-text').innerHTML = '<span class="text-red-500">啟動過久，請嘗試「強制重新整理」(Ctrl+F5)。<br/>若問題持續，可能是網路無法連線至 CDN。</span>';
+        }
+      }, 8000);
 
-      // --- 設定與常數 ---
-      
-      const STORAGE_KEY_HISTORY = "cantolearn_history_v1";
-      const STORAGE_KEY_API = "cantolearn_api_key";
+      const { useState, useEffect, useCallback } = React;
 
-      // 初始化 Gemini Client
-      const getAiClient = (apiKey) => {
-        return new GoogleGenAI({ apiKey: apiKey });
+      // --- 圖示元件 (SVG) ---
+      const Icons = {
+        Sparkles: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
+        Search: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+        Trash2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+        X: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+        Volume2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>,
+        KeyRound: ({className}) => <svg width="24" height="24" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>,
+        Loader2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
       };
 
-      // AI 回傳格式定義 (Schema)
-      const translationSchema = {
-        type: "OBJECT",
-        properties: {
-          items: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                text: { type: "STRING", description: "Traditional Chinese word" },
-                jyutping: { type: "STRING", description: "LSHK Jyutping" },
-                partOfSpeech: { type: "STRING", description: "Part of speech (Noun/Verb/Adj)" },
-              },
-              required: ["text", "jyutping", "partOfSpeech"],
-            },
-          },
-        },
-        required: ["items"],
+      // --- 核心邏輯：直接使用 fetch 呼叫 API (最穩定方案) ---
+      const callGeminiApi = async (apiKey, prompt) => {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" }
+          })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error?.message || `API 錯誤 (${response.status})`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error("API 回傳格式不如預期");
+        return JSON.parse(text);
       };
 
-      const suggestionSchema = {
-        type: "OBJECT",
-        properties: {
-          suggestions: {
-            type: "ARRAY",
-            items: {
-              type: "OBJECT",
-              properties: {
-                text: { type: "STRING", description: "HK Colloquial word" },
-                jyutping: { type: "STRING", description: "LSHK Jyutping" },
-                explanation: { type: "STRING", description: "Meaning" },
-              },
-              required: ["text", "jyutping", "explanation"],
-            },
-          },
-        },
-        required: ["suggestions"],
-      };
-
-      // 核心功能：翻譯
       const translateToCantonese = async (inputText, apiKey) => {
-        try {
-          const ai = getAiClient(apiKey);
-          // 使用最新的 gemini-1.5-flash 模型 (速度快且免費額度高)
-          const model = ai.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: translationSchema,
-                temperature: 0.1,
-            }
-          });
-
-          const prompt = `
-            You are a Cantonese language expert. Analyze input: "${inputText}".
-            
-            Rules:
-            1. If spaces exist (e.g. "食飯 瞓覺"), treat each space-separated segment as ONE vocabulary item.
-            2. If no spaces (e.g. "身體健康"), treat the continuous string as ONE item unless it's a very long sentence.
-            3. Keep meaningful words (Nouns, Verbs, Adj, Idioms). Remove pure grammatical particles if in a long sentence.
-            4. Output Traditional Chinese and LSHK Jyutping.
-          `;
-
-          const result = await model.generateContent(prompt);
-          const response = result.response;
-          const jsonText = response.text();
-          const parsed = JSON.parse(jsonText);
-          return parsed.items || [];
-        } catch (error) {
-          console.error("Translation Error:", error);
-          throw error;
-        }
+        const prompt = `
+          You are a Cantonese teacher. Translate "${inputText}" to Traditional Chinese and LSHK Jyutping.
+          Rules: Split text into meaningful words.
+          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]
+        `;
+        return await callGeminiApi(apiKey, prompt);
       };
 
-      // 核心功能：建議 (道地用語)
       const getColloquialSuggestions = async (word, apiKey) => {
+        const prompt = `
+          Cantonese Learning. Word: "${word}".
+          Give 2-3 Hong Kong colloquial/slang alternatives.
+          Example: "冰淇淋" -> [{"text": "雪糕", "jyutping": "syut3 gou1", "explanation": "Common term"}]
+          Output strictly JSON Array.
+        `;
         try {
-          const ai = getAiClient(apiKey);
-          const model = ai.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: suggestionSchema,
-                temperature: 0.4,
-            }
-          });
-
-          const prompt = `
-            User selected: "${word}".
-            Provide 2-3 **Hong Kong colloquial Cantonese** synonyms/slang.
-            E.g. Input "冰淇淋" -> Output "雪糕". Input "吃飯" -> Output "食飯", "食嘢".
-            Input "現在" -> Output "而家".
-          `;
-
-          const result = await model.generateContent(prompt);
-          const parsed = JSON.parse(result.response.text());
-          return parsed.suggestions || [];
-        } catch (error) {
-          console.error("Suggestion Error:", error);
-          return [];
+            const result = await callGeminiApi(apiKey, prompt);
+            return result.suggestions || result; // 兼容可能的格式差異
+        } catch (e) {
+            return [];
         }
       };
 
-      // --- UI 元件 ---
+      // --- React 元件 ---
 
       const AudioButton = ({ text }) => {
         const [isPlaying, setIsPlaying] = useState(false);
-
-        const handlePlay = useCallback((e) => {
-          e.stopPropagation();
-          if (!window.speechSynthesis) {
-            alert("您的瀏覽器不支援發音功能");
-            return;
-          }
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'zh-HK'; 
-          utterance.rate = 0.8;
-          utterance.onstart = () => setIsPlaying(true);
-          utterance.onend = () => setIsPlaying(false);
-          utterance.onerror = () => setIsPlaying(false);
-          window.speechSynthesis.speak(utterance);
-        }, [text]);
-
+        const handlePlay = (e) => {
+            e.stopPropagation();
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'zh-HK'; 
+            u.rate = 0.85;
+            u.onstart = () => setIsPlaying(true);
+            u.onend = () => setIsPlaying(false);
+            window.speechSynthesis.speak(u);
+        };
         return (
-          <button onClick={handlePlay} className={`p-1.5 rounded-full transition-colors ${isPlaying ? 'bg-teal-100 text-teal-600' : 'text-slate-400 hover:bg-slate-100 hover:text-teal-600'}`}>
-            <Volume2 size={18} />
-          </button>
+            <button onClick={handlePlay} className={`p-1.5 rounded-full transition ${isPlaying ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:text-teal-500 hover:bg-slate-100'}`}>
+                <Icons.Volume2 className="w-4 h-4" />
+            </button>
         );
       };
 
       const ResultCard = ({ item, onClick }) => (
-        <div 
-          onClick={onClick}
-          className={`bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center justify-center relative transition-all duration-200 ${onClick ? 'cursor-pointer hover:shadow-md hover:border-teal-200 hover:-translate-y-0.5' : ''}`}
-        >
-          <div className="absolute top-2 right-2"><AudioButton text={item.text} /></div>
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{item.partOfSpeech}</div>
-          <div className="text-3xl font-chinese font-medium text-slate-800 mb-1 text-center">{item.text}</div>
-          <div className="text-lg font-medium text-teal-600 font-sans tracking-tight">{item.jyutping}</div>
+        <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center relative transition hover:shadow-md hover:-translate-y-1 cursor-pointer group">
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition"><AudioButton text={item.text} /></div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{item.partOfSpeech}</span>
+          <div className="text-2xl md:text-3xl font-chinese font-medium text-slate-800 mb-1 text-center">{item.text}</div>
+          <div className="text-sm md:text-base font-medium text-teal-600 font-mono bg-teal-50 px-2 py-0.5 rounded">{item.jyutping}</div>
         </div>
       );
 
       const ApiKeyModal = ({ onSave }) => {
         const [key, setKey] = useState('');
-        
         return (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm fade-in">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-[fadeIn_0.3s]">
              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
                 <div className="flex items-center gap-3 mb-4 text-teal-600">
-                   <KeyRound size={28} />
-                   <h2 className="text-xl font-bold">設定 API Key</h2>
+                   <Icons.KeyRound className="w-7 h-7" />
+                   <h2 className="text-xl font-bold">API Key 設定</h2>
                 </div>
-                <p className="text-slate-500 text-sm mb-4">
-                  為了啟用 AI 智能翻譯與道地用語建議，請輸入您的 Google Gemini API Key。
-                  <br/><span className="text-xs opacity-70">(金鑰僅會儲存在您的瀏覽器中)</span>
+                <p className="text-slate-500 text-sm mb-4 leading-relaxed">
+                  本工具使用 Google Gemini AI 進行即時翻譯。請輸入您的免費 API Key 才能開始使用。
                 </p>
-                <input 
-                  type="password" 
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder="貼上 API Key (以 AIza 開頭...)"
-                  className="w-full p-3 border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                />
-                <div className="flex gap-2 justify-end">
-                   <a href="https://aistudio.google.com/app/apikey" target="_blank" className="px-4 py-2 text-sm text-teal-600 font-medium hover:bg-teal-50 rounded-lg">取得免費 Key</a>
-                   <button 
-                     disabled={!key}
-                     onClick={() => onSave(key)}
-                     className="px-4 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50"
-                   >
-                     儲存並開始
-                   </button>
+                <input type="password" value={key} onChange={e => setKey(e.target.value)} placeholder="貼上 API Key (AIza...)" className="w-full p-3 border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 outline-none" />
+                <div className="flex justify-end gap-2">
+                   <a href="https://aistudio.google.com/app/apikey" target="_blank" className="px-4 py-2 text-sm text-teal-600 font-medium hover:bg-teal-50 rounded-lg">取得 Key</a>
+                   <button disabled={!key} onClick={() => onSave(key)} className="px-5 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50 transition">開始使用</button>
                 </div>
              </div>
           </div>
@@ -261,240 +173,183 @@
       };
 
       // --- 主程式 App ---
-
       const App = () => {
-        const [view, setView] = useState('TRANSLATE'); // 'TRANSLATE' | 'HISTORY'
+        const [view, setView] = useState('TRANSLATE');
         const [inputText, setInputText] = useState('');
         const [loading, setLoading] = useState(false);
-        const [currentResults, setCurrentResults] = useState(null);
-        const [historyItems, setHistoryItems] = useState([]);
-        const [historySearch, setHistorySearch] = useState('');
-        const [error, setError] = useState(null);
+        const [results, setResults] = useState(null);
+        const [history, setHistory] = useState([]);
         const [apiKey, setApiKey] = useState(null);
-
-        // Modal 狀態
-        const [isModalOpen, setIsModalOpen] = useState(false);
-        const [modalLoading, setModalLoading] = useState(false);
-        const [selectedWord, setSelectedWord] = useState('');
-        const [suggestions, setSuggestions] = useState([]);
-        const [targetRecordId, setTargetRecordId] = useState(null);
+        const [modalData, setModalData] = useState(null);
 
         useEffect(() => {
-          // 檢查 API Key
-          const storedKey = localStorage.getItem(STORAGE_KEY_API);
-          if (storedKey) setApiKey(storedKey);
+            // 隱藏載入畫面
+            const loader = document.getElementById('loading-fallback');
+            if(loader) loader.style.display = 'none';
 
-          // 讀取歷史紀錄
-          const storedHistory = localStorage.getItem(STORAGE_KEY_HISTORY);
-          if (storedHistory) {
-            try { setHistoryItems(JSON.parse(storedHistory)); } catch(e) {}
-          }
-          
-          // 隱藏 loading 遮罩
-          const loader = document.getElementById('loading-fallback');
-          if(loader) loader.style.display = 'none';
+            const k = localStorage.getItem('cantolearn_api_key');
+            if(k) setApiKey(k);
+
+            const h = localStorage.getItem('cantolearn_history_v2');
+            if(h) setHistory(JSON.parse(h));
         }, []);
 
-        const saveApiKey = (key) => {
-          localStorage.setItem(STORAGE_KEY_API, key);
-          setApiKey(key);
-        };
-
-        const updateHistoryStorage = (items) => {
-          setHistoryItems(items);
-          localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(items.slice(0, 50)));
-        };
-
         const handleTranslate = async () => {
-          if (!inputText.trim()) return;
-          setLoading(true);
-          setError(null);
-          setCurrentResults(null);
-
-          try {
-            const items = await translateToCantonese(inputText, apiKey);
-            setCurrentResults(items);
-            
-            const newRecord = {
-              id: crypto.randomUUID(),
-              originalText: inputText,
-              results: items,
-              timestamp: Date.now(),
-            };
-            updateHistoryStorage([newRecord, ...historyItems]);
-          } catch (err) {
-            setError("翻譯失敗，請檢查您的 API Key 是否正確，或稍後再試。");
-          } finally {
-            setLoading(false);
-          }
+            if(!inputText.trim()) return;
+            setLoading(true);
+            setResults(null);
+            try {
+                const items = await translateToCantonese(inputText, apiKey);
+                const safeItems = Array.isArray(items) ? items : (items.items || []);
+                setResults(safeItems);
+                
+                const newRecord = { id: Date.now(), text: inputText, results: safeItems, date: new Date() };
+                const newHistory = [newRecord, ...history].slice(0, 50);
+                setHistory(newHistory);
+                localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
+            } catch(e) {
+                alert("翻譯錯誤: " + e.message);
+                if(e.message.includes("400") || e.message.includes("403")) {
+                    setApiKey(null); // 若 Key 失效則重設
+                }
+            } finally {
+                setLoading(false);
+            }
         };
 
-        const handleCardClick = async (word, recordId = null) => {
-          setSelectedWord(word);
-          setTargetRecordId(recordId);
-          setIsModalOpen(true);
-          setModalLoading(true);
-          setSuggestions([]);
-          try {
-            const results = await getColloquialSuggestions(word, apiKey);
-            setSuggestions(results);
-          } catch (err) { console.error(err); } 
-          finally { setModalLoading(false); }
+        const openSuggestion = async (word) => {
+            setModalData({ loading: true, word, items: [] });
+            try {
+                const suggs = await getColloquialSuggestions(word, apiKey);
+                setModalData({ loading: false, word, items: Array.isArray(suggs) ? suggs : [] });
+            } catch(e) {
+                setModalData(null);
+            }
         };
 
-        const handleAddSuggestion = (suggestion) => {
-          const newItem = { text: suggestion.text, jyutping: suggestion.jyutping, partOfSpeech: 'Colloquial' };
-          
-          if (view === 'TRANSLATE' && currentResults) {
-            setCurrentResults([...currentResults, newItem]);
-          } else if (view === 'HISTORY' && targetRecordId) {
-            const updated = historyItems.map(rec => {
-              if (rec.id === targetRecordId) return { ...rec, results: [...rec.results, newItem] };
-              return rec;
-            });
-            updateHistoryStorage(updated);
-          }
-          setIsModalOpen(false);
-        };
-
-        const filteredHistory = historyItems.filter(item => {
-          const q = historySearch.toLowerCase().trim();
-          if (!q) return true;
-          const dateStr = new Date(item.timestamp).toLocaleDateString();
-          return item.originalText.toLowerCase().includes(q) || dateStr.includes(q);
-        });
-
-        // 如果沒有 Key，顯示輸入視窗
-        if (!apiKey) return <ApiKeyModal onSave={saveApiKey} />;
+        if (!apiKey) return <ApiKeyModal onSave={(k) => { localStorage.setItem('cantolearn_api_key', k); setApiKey(k); }} />;
 
         return (
-          <div className="min-h-screen bg-slate-50 flex flex-col relative pb-20 fade-in">
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-              <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center text-white font-chinese font-bold text-lg">粵</div>
-                  <h1 className="font-bold text-slate-800 text-lg">CantoLearn AI</h1>
-                </div>
-                <nav className="flex bg-slate-100 p-1 rounded-lg">
-                  <button onClick={() => setView('TRANSLATE')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'TRANSLATE' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>翻譯</button>
-                  <button onClick={() => setView('HISTORY')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${view === 'HISTORY' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>歷史</button>
-                </nav>
-              </div>
-            </header>
-
-            <main className="flex-1 max-w-3xl w-full mx-auto p-4 md:p-6">
-              {view === 'TRANSLATE' && (
-                <div className="space-y-8">
-                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-1">
-                    <textarea 
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      placeholder="請輸入中文 (例如：冰淇淋)..."
-                      className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none focus:ring-0 placeholder:text-slate-300 font-chinese text-slate-700"
-                    />
-                    <div className="flex justify-between items-center px-4 pb-4">
-                      <div className="text-xs text-slate-400"><span className="bg-slate-100 px-2 py-1 rounded">Tip</span> 可使用空白鍵分隔不同詞彙</div>
-                      <button onClick={handleTranslate} disabled={loading || !inputText.trim()} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-all shadow-md disabled:opacity-50">
-                        {loading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />} 
-                        AI 翻譯
-                      </button>
-                    </div>
-                  </div>
-
-                  {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm text-center border border-red-100">{error}</div>}
-
-                  {currentResults && (
-                    <div className="space-y-4">
-                       {currentResults.length === 0 ? <div className="text-center text-slate-400">沒有結果</div> : 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {currentResults.map((item, i) => <ResultCard key={i} item={item} onClick={() => handleCardClick(item.text)} />)}
+            <div className="min-h-screen flex flex-col pb-10 animate-[fadeIn_0.5s]">
+                <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+                    <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-teal-600 rounded-lg flex items-center justify-center text-white font-chinese font-bold text-lg">粵</div>
+                            <h1 className="font-bold text-slate-800">CantoLearn AI</h1>
                         </div>
-                       }
-                       <div className="text-center text-xs text-slate-400 pt-4">
-                          💡 點擊卡片可查看該詞彙的「道地港式說法」
-                       </div>
+                        <nav className="flex bg-slate-100 p-1 rounded-lg">
+                            {['TRANSLATE', 'HISTORY'].map(v => (
+                                <button key={v} onClick={() => setView(v)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${view === v ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>
+                                    {v === 'TRANSLATE' ? '翻譯' : '歷史'}
+                                </button>
+                            ))}
+                        </nav>
                     </div>
-                  )}
-                  {!currentResults && !loading && (
-                    <div className="text-center py-20 opacity-50">
-                      <Search size={32} className="mx-auto mb-4 text-slate-300" />
-                      <h3 className="text-slate-500">輸入文字開始翻譯</h3>
-                    </div>
-                  )}
-                </div>
-              )}
+                </header>
 
-              {view === 'HISTORY' && (
-                <div className="space-y-6">
-                   <div className="relative">
-                      <Search size={16} className="absolute left-3 top-3 text-slate-400" />
-                      <input type="text" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="搜尋歷史紀錄..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500" />
-                   </div>
-                   
-                   <div className="space-y-4">
-                      {filteredHistory.length === 0 ? <div className="text-center py-10 text-slate-400">尚無歷史紀錄</div> :
-                        filteredHistory.map(rec => (
-                          <div key={rec.id} className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 group">
-                             <div className="flex justify-between mb-3">
-                                <div>
-                                  <p className="text-xs text-slate-400">{new Date(rec.timestamp).toLocaleString()}</p>
-                                  <h3 className="text-lg font-chinese font-medium">{rec.originalText}</h3>
+                <main className="flex-1 max-w-3xl w-full mx-auto p-4 md:p-6">
+                    {view === 'TRANSLATE' && (
+                        <div className="space-y-6">
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-1 focus-within:ring-2 focus-within:ring-teal-500 transition">
+                                <textarea 
+                                    value={inputText}
+                                    onChange={e => setInputText(e.target.value)}
+                                    placeholder="輸入中文... (例如: 冰淇淋)"
+                                    className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"
+                                ></textarea>
+                                <div className="flex justify-between items-center px-4 pb-4">
+                                    <span className="text-xs text-slate-400">AI 智能分析</span>
+                                    <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed">
+                                        {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 
+                                        翻譯
+                                    </button>
                                 </div>
-                                <button onClick={() => updateHistoryStorage(historyItems.filter(h => h.id !== rec.id))} className="text-slate-300 hover:text-red-500 transition"><Trash2 size={16}/></button>
-                             </div>
-                             <div className="flex flex-wrap gap-2">
-                                {rec.results.map((item, idx) => (
-                                  <div key={idx} onClick={() => handleCardClick(item.text, rec.id)} className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200 cursor-pointer hover:border-teal-300 transition">
-                                     <span className="font-chinese text-slate-700">{item.text}</span>
-                                     <span className="text-xs text-teal-600 font-bold">{item.jyutping}</span>
-                                  </div>
-                                ))}
-                             </div>
-                          </div>
-                        ))
-                      }
-                   </div>
-                </div>
-              )}
-            </main>
+                            </div>
 
-            {isModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 relative overflow-hidden">
-                  <button onClick={() => setIsModalOpen(false)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"><X size={20}/></button>
-                  <h3 className="text-lg font-bold text-slate-800 mb-1">道地港式說法</h3>
-                  <p className="text-sm text-slate-500 mb-4">"{selectedWord}" 在香港通常會說...</p>
-                  
-                  {modalLoading ? <div className="py-8 flex justify-center text-teal-600"><Loader2 className="animate-spin" /></div> : 
-                   suggestions.length === 0 ? <div className="py-6 text-center text-slate-400 text-sm">AI 沒有找到相關的道地建議</div> :
-                   <div className="space-y-3">
-                     {suggestions.map((s, i) => (
-                       <div key={i} className="flex justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-                         <div>
-                            <div className="flex items-baseline gap-2"><span className="font-bold text-slate-800">{s.text}</span><span className="text-sm text-teal-600">{s.jyutping}</span></div>
-                            <p className="text-xs text-slate-500">{s.explanation}</p>
-                         </div>
-                         <div className="flex gap-1">
-                            <div className="scale-75"><AudioButton text={s.text} /></div>
-                            <button onClick={() => handleAddSuggestion(s)} className="text-teal-700 hover:bg-teal-200 p-2 rounded-full" title="加入列表"><Plus size={18}/></button>
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                  }
-                </div>
-              </div>
-            )}
-            
-            <footer className="text-center text-slate-300 text-xs py-4">
-                Powered by Google Gemini & React
-            </footer>
-          </div>
+                            {results && (
+                                <div className="space-y-4 animate-[fadeIn_0.3s]">
+                                    <div className="flex justify-between items-end px-1">
+                                        <h3 className="font-bold text-slate-700">翻譯結果</h3>
+                                        <span className="text-xs text-slate-400">點擊卡片查看道地說法</span>
+                                    </div>
+                                    {results.length === 0 ? <div className="text-center text-slate-400 py-8">沒有結果</div> : 
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {results.map((item, i) => <ResultCard key={i} item={item} onClick={() => openSuggestion(item.text)} />)}
+                                        </div>
+                                    }
+                                </div>
+                            )}
+                            
+                            {!results && !loading && (
+                                <div className="text-center py-20 opacity-40">
+                                    <Icons.Search className="mx-auto mb-4 text-slate-300 w-10 h-10" />
+                                    <p>輸入文字開始學習</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {view === 'HISTORY' && (
+                        <div className="space-y-4">
+                            {history.length === 0 ? <div className="text-center py-10 text-slate-400">暫無紀錄</div> : 
+                                history.map((h, i) => (
+                                    <div key={h.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm group">
+                                        <div className="flex justify-between mb-2">
+                                            <span className="text-xs text-slate-400">{new Date(h.date).toLocaleString()}</span>
+                                            <button onClick={() => {
+                                                const n = history.filter(x => x.id !== h.id);
+                                                setHistory(n);
+                                                localStorage.setItem('cantolearn_history_v2', JSON.stringify(n));
+                                            }} className="text-slate-300 hover:text-red-500"><Icons.Trash2 className="w-4 h-4"/></button>
+                                        </div>
+                                        <div className="font-chinese font-bold text-lg text-slate-800 mb-2">{h.text}</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {h.results.map((r, idx) => (
+                                                <span key={idx} className="text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 text-slate-600">
+                                                    {r.text} <span className="text-teal-600 font-mono">{r.jyutping}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))
+                            }
+                        </div>
+                    )}
+                </main>
+
+                {/* Modal */}
+                {modalData && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-[fadeIn_0.2s]">
+                        <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 relative">
+                            <button onClick={() => setModalData(null)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"><Icons.X className="w-5 h-5" /></button>
+                            <h3 className="font-bold text-slate-800 mb-1">道地港式說法</h3>
+                            <p className="text-sm text-slate-500 mb-4">"{modalData.word}" 在香港還可以說...</p>
+                            
+                            {modalData.loading ? 
+                                <div className="py-8 flex justify-center text-teal-600"><Icons.Loader2 className="animate-spin w-6 h-6"/></div> : 
+                                <div className="space-y-2">
+                                    {modalData.items.length === 0 ? <div className="text-center text-sm text-slate-400 py-4">沒有特別的替代說法</div> :
+                                        modalData.items.map((s, i) => (
+                                            <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                                <div>
+                                                    <div className="font-bold text-slate-800">{s.text} <span className="text-teal-600 text-xs font-normal font-mono">{s.jyutping}</span></div>
+                                                    <div className="text-xs text-slate-500">{s.explanation}</div>
+                                                </div>
+                                                <div className="scale-90"><AudioButton text={s.text} /></div>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                )}
+            </div>
         );
       };
 
-      const root = createRoot(document.getElementById('root'));
+      const root = ReactDOM.createRoot(document.getElementById('root'));
       root.render(<App />);
     </script>
-  </body>
+</body>
 </html>
