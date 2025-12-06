@@ -124,9 +124,9 @@
       const translateToCantonese = async (inputText, apiKey) => {
         try {
           const ai = getAiClient(apiKey);
-          // 使用最新的 gemini-1.5-flash 模型 (速度快且免費額度高)
+          // 使用最新的 gemini-2.5-flash 模型 (速度快且免費額度高)
           const model = ai.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: translationSchema,
@@ -160,7 +160,7 @@
         try {
           const ai = getAiClient(apiKey);
           const model = ai.getGenerativeModel({ 
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash",
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: suggestionSchema,
