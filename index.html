@@ -59,11 +59,11 @@
         }
       }, 8000);
 
-      const { useState, useEffect, useCallback } = React;
+      const { useState, useEffect, useCallback, useMemo } = React;
 
       // --- 圖示元件 (SVG) ---
       const Icons = {
-        Sparkles: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
+        Sparkles: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
         Search: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
         Trash2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
         X: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
@@ -158,6 +158,20 @@
         );
       };
 
+      // 標亮文字元件
+      const HighlightText = ({ text, highlight }) => {
+        if (!highlight.trim()) return <>{text}</>;
+        const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        const parts = text.split(regex);
+        return (
+            <>
+                {parts.map((part, i) => 
+                    regex.test(part) ? <span key={i} className="bg-yellow-200 text-slate-900 font-bold rounded px-0.5">{part}</span> : part
+                )}
+            </>
+        );
+      };
+
       const ResultCard = ({ item, onClick }) => (
         <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center relative transition hover:shadow-md hover:-translate-y-1 cursor-pointer group">
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition"><AudioButton text={item.text} /></div>
@@ -198,7 +212,9 @@
         const [history, setHistory] = useState([]);
         const [apiKey, setApiKey] = useState(null);
         const [modalData, setModalData] = useState(null);
-        // 新增：記錄當前翻譯的 ID，用於後續加入道地用語
+        const [historySearch, setHistorySearch] = useState('');
+        
+        // 新增：紀錄當前查詢的 ID，用於更新歷史紀錄
         const [currentRecordId, setCurrentRecordId] = useState(null);
 
         useEffect(() => {
@@ -223,7 +239,7 @@
                 setResults(safeItems);
                 
                 const newId = Date.now();
-                setCurrentRecordId(newId); // 記錄當前 ID
+                setCurrentRecordId(newId); // 儲存當前查詢 ID
                 const newRecord = { id: newId, text: inputText, results: safeItems, date: new Date() };
                 const newHistory = [newRecord, ...history].slice(0, 50);
                 setHistory(newHistory);
@@ -248,7 +264,7 @@
             }
         };
 
-        // 新增：將道地用語加入結果和歷史紀錄
+        // 新增：將道地用語加入目前結果與歷史紀錄
         const handleAddSuggestion = (item) => {
             const newItem = {
                 text: item.text,
@@ -256,16 +272,16 @@
                 partOfSpeech: '口語'
             };
 
-            // 1. 更新當前顯示的結果 (避免重複)
+            // 1. 更新當前畫面結果 (避免重複)
             if (results && !results.some(r => r.text === newItem.text)) {
-                setResults([...results, newItem]);
+                setResults(prev => [...prev, newItem]);
             }
 
             // 2. 更新歷史紀錄
             if (currentRecordId) {
                 const updatedHistory = history.map(rec => {
                     if (rec.id === currentRecordId) {
-                        // 避免在歷史紀錄中重複
+                        // 檢查歷史紀錄中是否已存在
                         if (!rec.results.some(r => r.text === newItem.text)) {
                             return { ...rec, results: [...rec.results, newItem] };
                         }
@@ -275,8 +291,16 @@
                 setHistory(updatedHistory);
                 localStorage.setItem('cantolearn_history_v2', JSON.stringify(updatedHistory));
             }
-            // 關閉視窗或給予回饋 (這裡選擇保持開啟方便繼續加入)
         };
+
+        const filteredHistory = useMemo(() => {
+            if (!historySearch.trim()) return history;
+            const query = historySearch.toLowerCase();
+            return history.filter(h => 
+                h.text.toLowerCase().includes(query) || 
+                h.results.some(r => r.text.toLowerCase().includes(query))
+            );
+        }, [history, historySearch]);
 
         if (!apiKey) return <ApiKeyModal onSave={(k) => { localStorage.setItem('cantolearn_api_key', k); setApiKey(k); }} />;
 
@@ -342,8 +366,19 @@
 
                     {view === 'HISTORY' && (
                         <div className="space-y-4">
-                            {history.length === 0 ? <div className="text-center py-10 text-slate-400">暫無紀錄</div> : 
-                                history.map((h, i) => (
+                            <div className="relative mb-4">
+                                <Icons.Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={historySearch}
+                                    onChange={(e) => setHistorySearch(e.target.value)}
+                                    placeholder="搜尋歷史紀錄..."
+                                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 transition"
+                                />
+                            </div>
+
+                            {filteredHistory.length === 0 ? <div className="text-center py-10 text-slate-400">{historySearch ? '查無符合紀錄' : '暫無紀錄'}</div> : 
+                                filteredHistory.map((h, i) => (
                                     <div key={h.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm group">
                                         <div className="flex justify-between mb-2">
                                             <span className="text-xs text-slate-400">{new Date(h.date).toLocaleString()}</span>
@@ -353,12 +388,15 @@
                                                 localStorage.setItem('cantolearn_history_v2', JSON.stringify(n));
                                             }} className="text-slate-300 hover:text-red-500"><Icons.Trash2 className="w-4 h-4"/></button>
                                         </div>
-                                        <div className="font-chinese font-bold text-lg text-slate-800 mb-2">{h.text}</div>
+                                        <div className="font-chinese font-bold text-lg text-slate-800 mb-2">
+                                            <HighlightText text={h.text} highlight={historySearch} />
+                                        </div>
                                         <div className="flex flex-wrap gap-2">
                                             {h.results.map((r, idx) => (
-                                                <span key={idx} className="text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 text-slate-600">
-                                                    {r.text} <span className="text-teal-600 font-mono">{r.jyutping}</span>
-                                                    <div className="inline-block ml-1 align-middle scale-75"><AudioButton text={r.text} /></div>
+                                                <span key={idx} className="text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 text-slate-600 flex items-center gap-1">
+                                                    <HighlightText text={r.text} highlight={historySearch} />
+                                                    <span className="text-teal-600 font-mono">{r.jyutping}</span>
+                                                    <AudioButton text={r.text} />
                                                 </span>
                                             ))}
                                         </div>
@@ -390,7 +428,7 @@
                                                 <div className="flex gap-1">
                                                     <div className="scale-90"><AudioButton text={s.text} /></div>
                                                     {/* 新增：加入結果按鈕 */}
-                                                    <button onClick={() => handleAddSuggestion(s)} className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-full transition" title="加入翻譯結果">
+                                                    <button onClick={() => handleAddSuggestion(s)} className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-full transition hover:scale-110" title="加入翻譯結果">
                                                         <Icons.Plus className="w-4 h-4" />
                                                     </button>
                                                 </div>
