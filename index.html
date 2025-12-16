@@ -75,7 +75,7 @@
 
       // --- 核心邏輯：直接使用 fetch 呼叫 API (最穩定方案) ---
       const callGeminiApi = async (apiKey, prompt) => {
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
           method: 'POST',
@@ -155,20 +155,6 @@
             <button onClick={handlePlay} className={`p-1.5 rounded-full transition ${isPlaying ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:text-teal-500 hover:bg-slate-100'}`}>
                 <Icons.Volume2 className="w-4 h-4" />
             </button>
-        );
-      };
-
-      // 標亮文字元件
-      const HighlightText = ({ text, highlight }) => {
-        if (!highlight.trim()) return <>{text}</>;
-        const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        const parts = text.split(regex);
-        return (
-            <>
-                {parts.map((part, i) => 
-                    regex.test(part) ? <span key={i} className="bg-yellow-200 text-slate-900 font-bold rounded px-0.5">{part}</span> : part
-                )}
-            </>
         );
       };
 
@@ -302,6 +288,16 @@
             );
         }, [history, historySearch]);
 
+        // 新增：重設 API Key 的功能函式
+        const resetApiKey = () => {
+            if (confirm("確定要更換 API Key 嗎？將會清除目前的金鑰設定。")) {
+                localStorage.removeItem('cantolearn_api_key');
+                setApiKey(null);
+                // 重新載入以確保狀態完全重置
+                window.location.reload();
+            }
+        };
+
         if (!apiKey) return <ApiKeyModal onSave={(k) => { localStorage.setItem('cantolearn_api_key', k); setApiKey(k); }} />;
 
         return (
@@ -329,11 +325,17 @@
                                 <textarea 
                                     value={inputText}
                                     onChange={e => setInputText(e.target.value)}
-                                    placeholder="輸入中文... "
+                                    placeholder="輸入中文... (例如: 冰淇淋)"
                                     className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"
                                 ></textarea>
                                 <div className="flex justify-between items-center px-4 pb-4">
-                                    <span className="text-xs text-slate-400">AI 智能分析 by Gemini 2.0 flash v1</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400">AI 智能分析</span>
+                                        {/* 新增：更換 Key 按鈕 */}
+                                        <button onClick={resetApiKey} className="text-slate-400 hover:text-teal-600 text-xs font-bold flex items-center gap-1 transition ml-2 border-l border-slate-200 pl-2">
+                                            <Icons.KeyRound className="w-3 h-3" /> 更換 Key
+                                        </button>
+                                    </div>
                                     <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed">
                                         {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 
                                         翻譯
