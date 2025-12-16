@@ -8,11 +8,11 @@
     <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. React & ReactDOM -->
+    <!-- 2. React & ReactDOM (使用最穩定的 UMD 版本) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- 3. Babel -->
+    <!-- 3. Babel (編譯器) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- 4. SheetJS (新增：用於 Excel 匯入匯出) -->
@@ -38,6 +38,7 @@
     </script>
     <style>
       body { background-color: #f8fafc; }
+      /* 隱藏未編譯的內容 */
       #root:empty { display: none; }
     </style>
 </head>
@@ -53,40 +54,49 @@
 
     <!-- 應用程式邏輯 -->
     <script type="text/babel">
+      // 設定超時偵測：如果 5 秒還沒載入 React，顯示錯誤訊息
       setTimeout(() => {
         const loader = document.getElementById('loading-fallback');
         if (loader && loader.style.display !== 'none') {
-           document.getElementById('loading-text').innerHTML = '<span class="text-red-500">啟動過久，請嘗試「強制重新整理」(Ctrl+F5)。</span>';
+           document.getElementById('loading-text').innerHTML = '<span class="text-red-500">啟動過久，請嘗試「強制重新整理」(Ctrl+F5)。<br/>若問題持續，可能是網路無法連線至 CDN。</span>';
         }
       }, 8000);
 
       const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-      // --- 圖示元件 ---
+      // --- 圖示元件 (SVG) ---
       const Icons = {
-        Sparkles: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
-        Search: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
-        Trash2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
-        X: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
-        Volume2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>,
-        KeyRound: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>,
-        Loader2: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-        Plus: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
-        // 新增圖示
-        Download: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-        Upload: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Sparkles: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
+        Search: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+        Trash2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+        X: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+        Volume2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>,
+        KeyRound: ({className}) => <svg width="24" height="24" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>,
+        Loader2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+        Plus: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+        // 新增下載與上傳圖示
+        Download: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+        Upload: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       };
 
+      // --- 核心邏輯：直接使用 fetch 呼叫 API (最穩定方案) ---
       const callGeminiApi = async (apiKey, prompt) => {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        
         const response = await fetch(url, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" }
+          })
         });
+
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
             throw new Error(errData.error?.message || `API 錯誤 (${response.status})`);
         }
+
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error("API 回傳格式不如預期");
@@ -94,20 +104,48 @@
       };
 
       const translateToCantonese = async (inputText, apiKey) => {
-        const prompt = `You are a Cantonese expert. Analyze "${inputText}". 
-          Rules: 1. Respect spaces for segmentation. 2. If no spaces, treat as one phrase. 3. Filter particles only for sentences.
-          Output JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]`;
+        // 完全保留原有的詳細 Prompt
+        const prompt = `
+          You are a Cantonese expert and teacher. 
+          Your task is to analyze "${inputText}" and convert it into a structured format for learning.
+          Rules: 
+          1. **Segmentation Strategy**:
+                 - **Respect User Spacing**: If the input text is separated by spaces (e.g., "食飯 瞓覺"), treat each space-separated segment as a distinct, single vocabulary item. Do NOT break these segments down further.
+                 - **No Spaces**: If the input is a continuous string without spaces (e.g., "身體健康"), treat the **entire string** as one single vocabulary item/phrase. Do not segment it into component words unless it is clearly a long, complex sentence structure. Prioritize keeping it as one unit.
+
+          2. **Content Handling**:
+                 - **Keep** significant content words (Nouns, Verbs, Adjectives, Idioms).
+                 - **Remove** only grammatical particles (like 嗎, 呢) if they appear in a long sentence context, but preserve them if they are part of a specific phrase the user typed.
+
+          3. **Output Format**:
+                 - Convert the retained words to **Traditional Chinese**.
+                 - Provide the **LSHK Jyutping** (Hong Kong Linguistic Society) romanization with tone numbers.
+                 - Return the result as a JSON object matching the schema.
+          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]
+        `;
         return await callGeminiApi(apiKey, prompt);
       };
 
       const getColloquialSuggestions = async (word, apiKey) => {
-        const prompt = `Cantonese Learning. Word: "${word}". Provide 2-3 HK colloquial synonyms.
-          Output JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]`;
+        // 完全保留原有的詳細 Prompt
+        const prompt = `
+          The User is learning Cantonese. They have seleted the word: "${word}".
+          Provide 2 to 3 **Hong Kong colloquial Cantonese** synonyms, slang, or more natural spoken alternatives for this word.
+          Example:
+              If input is "吃飯" (Eat rice/Have a meal), output "食飯" (Standard spoken) and "食嘢" (Eat something).
+              If input is "冰淇淋" (Ice cream), output "雪糕".
+              If input is "老師" (Teacher), output "阿Sir" or "Miss" (if common context applies) or just return the same if it is already natural.
+          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]
+        `;
         try {
             const result = await callGeminiApi(apiKey, prompt);
-            return result.suggestions || result;
-        } catch (e) { return []; }
+            return result.suggestions || result; // 兼容可能的格式差異
+        } catch (e) {
+            return [];
+        }
       };
+
+      // --- React 元件 ---
 
       const AudioButton = ({ text }) => {
         const [isPlaying, setIsPlaying] = useState(false);
@@ -115,18 +153,31 @@
             e.stopPropagation();
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
-            u.lang = 'zh-HK'; u.rate = 0.85;
+            u.lang = 'zh-HK'; 
+            u.rate = 0.85;
             u.onstart = () => setIsPlaying(true);
             u.onend = () => setIsPlaying(false);
             window.speechSynthesis.speak(u);
         };
-        return <button onClick={handlePlay} className={`p-1.5 rounded-full transition ${isPlaying ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:text-teal-500 hover:bg-slate-100'}`}><Icons.Volume2 className="w-4 h-4" /></button>;
+        return (
+            <button onClick={handlePlay} className={`p-1.5 rounded-full transition ${isPlaying ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:text-teal-500 hover:bg-slate-100'}`}>
+                <Icons.Volume2 className="w-4 h-4" />
+            </button>
+        );
       };
 
+      // 標亮文字元件
       const HighlightText = ({ text, highlight }) => {
         if (!highlight.trim()) return <>{text}</>;
         const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        return <>{text.split(regex).map((part, i) => regex.test(part) ? <span key={i} className="bg-yellow-200 text-slate-900 font-bold px-0.5 rounded">{part}</span> : part)}</>;
+        const parts = text.split(regex);
+        return (
+            <>
+                {parts.map((part, i) => 
+                    regex.test(part) ? <span key={i} className="bg-yellow-200 text-slate-900 font-bold rounded px-0.5">{part}</span> : part
+                )}
+            </>
+        );
       };
 
       const ResultCard = ({ item, onClick }) => (
@@ -144,18 +195,23 @@
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-[fadeIn_0.3s]">
              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
                 <div className="flex items-center gap-3 mb-4 text-teal-600">
-                   <Icons.KeyRound className="w-7 h-7" /> <h2 className="text-xl font-bold">API Key 設定</h2>
+                   <Icons.KeyRound className="w-7 h-7" />
+                   <h2 className="text-xl font-bold">API Key 設定</h2>
                 </div>
-                <input type="password" value={key} onChange={e => setKey(e.target.value)} placeholder="貼上 API Key..." className="w-full p-3 border rounded-lg mb-4 outline-none focus:ring-2 focus:ring-teal-500" />
+                <p className="text-slate-500 text-sm mb-4 leading-relaxed">
+                  本工具使用 Google Gemini AI 進行即時翻譯。請輸入您的免費 API Key 才能開始使用。
+                </p>
+                <input type="password" value={key} onChange={e => setKey(e.target.value)} placeholder="貼上 API Key (AIza...)" className="w-full p-3 border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-teal-500 outline-none" />
                 <div className="flex justify-end gap-2">
                    <a href="https://aistudio.google.com/app/apikey" target="_blank" className="px-4 py-2 text-sm text-teal-600 font-medium hover:bg-teal-50 rounded-lg">取得 Key</a>
-                   <button disabled={!key} onClick={() => onSave(key)} className="px-5 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50">開始使用</button>
+                   <button disabled={!key} onClick={() => onSave(key)} className="px-5 py-2 bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-700 disabled:opacity-50 transition">開始使用</button>
                 </div>
              </div>
           </div>
         );
       };
 
+      // --- 主程式 App ---
       const App = () => {
         const [view, setView] = useState('TRANSLATE');
         const [inputText, setInputText] = useState('');
@@ -167,37 +223,40 @@
         const [historySearch, setHistorySearch] = useState('');
         const [currentRecordId, setCurrentRecordId] = useState(null);
         
-        // 隱藏檔案輸入
+        // 用於觸發檔案選擇
         const fileInputRef = useRef(null);
 
         useEffect(() => {
-            document.getElementById('loading-fallback').style.display = 'none';
+            const loader = document.getElementById('loading-fallback');
+            if(loader) loader.style.display = 'none';
+
             const k = localStorage.getItem('cantolearn_api_key');
             if(k) setApiKey(k);
+
             const h = localStorage.getItem('cantolearn_history_v2');
             if(h) setHistory(JSON.parse(h));
         }, []);
 
-        // --- 匯出功能 ---
+        // --- 匯出功能 (Export) ---
         const handleExport = (record) => {
             const date = new Date(record.date);
             const mm = (date.getMonth() + 1).toString().padStart(2, '0');
             const dd = date.getDate().toString().padStart(2, '0');
             const dateStr = `${mm}${dd}`;
             
-            // 建立資料陣列
+            // 整理資料
             const data = record.results.map(r => ({ "生字": r.text, "拼音": r.jyutping }));
             
-            // 建立 Workbook
+            // 產生 Excel
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, dateStr); // Sheet 名稱 mmdd
+            XLSX.utils.book_append_sheet(wb, ws, dateStr); // Sheet 名稱
             
-            // 下載檔案
+            // 下載
             XLSX.writeFile(wb, `粵語生字匯出_${dateStr}.xlsx`);
         };
 
-        // --- 匯入功能 ---
+        // --- 匯入功能 (Import) ---
         const handleImportFile = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -207,22 +266,22 @@
                 try {
                     const data = evt.target.result;
                     const workbook = XLSX.read(data, { type: 'binary' });
-                    const sheetName = workbook.SheetNames[0]; // 讀取第一個 sheet
+                    const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
                     const json = XLSX.utils.sheet_to_json(worksheet);
 
                     if (json.length === 0) throw new Error("檔案內容為空");
 
-                    // 轉換格式並驗證
+                    // 檢查必要欄位並轉換
                     const importedResults = json.map(row => ({
                         text: row['生字'],
                         jyutping: row['拼音'],
                         partOfSpeech: '匯入'
                     })).filter(item => item.text && item.jyutping);
 
-                    if (importedResults.length === 0) throw new Error("找不到 '生字' 或 '拼音' 欄位，請確認格式。");
+                    if (importedResults.length === 0) throw new Error("找不到 '生字' 或 '拼音' 欄位，請確認 Excel 格式。");
 
-                    // 存入歷史紀錄
+                    // 存入歷史
                     const newRecord = {
                         id: Date.now(),
                         text: `匯入資料 (${file.name})`,
@@ -234,24 +293,26 @@
                     setHistory(newHistory);
                     localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
                     
-                    alert(`成功匯入 ${importedResults.length} 個生字！`);
-                    setView('HISTORY'); // 切換到歷史頁面查看
+                    alert(`成功匯入 ${importedResults.length} 筆資料！`);
+                    setView('HISTORY'); // 跳轉到歷史頁面查看
 
                 } catch (error) {
                     alert("匯入失敗: " + error.message);
                 }
-                e.target.value = ''; // 清空 input 讓同個檔案可以再選一次
+                e.target.value = ''; // 重置 input 讓同檔名可再選
             };
             reader.readAsBinaryString(file);
         };
 
         const handleTranslate = async () => {
             if(!inputText.trim()) return;
-            setLoading(true); setResults(null);
+            setLoading(true);
+            setResults(null);
             try {
                 const items = await translateToCantonese(inputText, apiKey);
                 const safeItems = Array.isArray(items) ? items : (items.items || []);
                 setResults(safeItems);
+                
                 const newId = Date.now();
                 setCurrentRecordId(newId);
                 const newRecord = { id: newId, text: inputText, results: safeItems, date: new Date() };
@@ -260,8 +321,12 @@
                 localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
             } catch(e) {
                 alert("翻譯錯誤: " + e.message);
-                if(e.message.includes("400") || e.message.includes("403")) setApiKey(null);
-            } finally { setLoading(false); }
+                if(e.message.includes("400") || e.message.includes("403")) {
+                    setApiKey(null);
+                }
+            } finally {
+                setLoading(false);
+            }
         };
 
         const openSuggestion = async (word) => {
@@ -269,16 +334,28 @@
             try {
                 const suggs = await getColloquialSuggestions(word, apiKey);
                 setModalData({ loading: false, word, items: Array.isArray(suggs) ? suggs : [] });
-            } catch(e) { setModalData(null); }
+            } catch(e) {
+                setModalData(null);
+            }
         };
 
         const handleAddSuggestion = (item) => {
-            const newItem = { text: item.text, jyutping: item.jyutping, partOfSpeech: '口語' };
-            if (results && !results.some(r => r.text === newItem.text)) setResults(prev => [...prev, newItem]);
+            const newItem = {
+                text: item.text,
+                jyutping: item.jyutping,
+                partOfSpeech: '口語'
+            };
+
+            if (results && !results.some(r => r.text === newItem.text)) {
+                setResults(prev => [...prev, newItem]);
+            }
+
             if (currentRecordId) {
                 const updatedHistory = history.map(rec => {
-                    if (rec.id === currentRecordId && !rec.results.some(r => r.text === newItem.text)) {
-                        return { ...rec, results: [...rec.results, newItem] };
+                    if (rec.id === currentRecordId) {
+                        if (!rec.results.some(r => r.text === newItem.text)) {
+                            return { ...rec, results: [...rec.results, newItem] };
+                        }
                     }
                     return rec;
                 });
@@ -289,8 +366,11 @@
 
         const filteredHistory = useMemo(() => {
             if (!historySearch.trim()) return history;
-            const q = historySearch.toLowerCase();
-            return history.filter(h => h.text.toLowerCase().includes(q) || h.results.some(r => r.text.toLowerCase().includes(q)));
+            const query = historySearch.toLowerCase();
+            return history.filter(h => 
+                h.text.toLowerCase().includes(query) || 
+                h.results.some(r => r.text.toLowerCase().includes(query))
+            );
         }, [history, historySearch]);
 
         if (!apiKey) return <ApiKeyModal onSave={(k) => { localStorage.setItem('cantolearn_api_key', k); setApiKey(k); }} />;
@@ -305,7 +385,9 @@
                         </div>
                         <nav className="flex bg-slate-100 p-1 rounded-lg">
                             {['TRANSLATE', 'HISTORY'].map(v => (
-                                <button key={v} onClick={() => setView(v)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${view === v ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>{v === 'TRANSLATE' ? '翻譯' : '歷史'}</button>
+                                <button key={v} onClick={() => setView(v)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${view === v ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>
+                                    {v === 'TRANSLATE' ? '翻譯' : '歷史'}
+                                </button>
                             ))}
                         </nav>
                     </div>
@@ -315,10 +397,21 @@
                     {view === 'TRANSLATE' && (
                         <div className="space-y-6">
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-1 focus-within:ring-2 focus-within:ring-teal-500 transition">
-                                <textarea value={inputText} onChange={e => setInputText(e.target.value)} placeholder="輸入中文... (例如: 冰淇淋)" className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"></textarea>
+                                <textarea 
+                                    value={inputText}
+                                    onChange={e => setInputText(e.target.value)}
+                                    placeholder="輸入中文... (例如: 冰淇淋)"
+                                    className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"
+                                ></textarea>
                                 <div className="flex justify-between items-center px-4 pb-4">
-                                    {/* 隱藏的檔案輸入 */}
-                                    <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".xlsx" className="hidden" />
+                                    {/* 隱藏的檔案上傳輸入框 */}
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        onChange={handleImportFile}
+                                        accept=".xlsx"
+                                        className="hidden" 
+                                    />
                                     
                                     {/* 匯入按鈕 */}
                                     <button onClick={() => fileInputRef.current.click()} className="text-slate-400 hover:text-teal-600 text-xs font-bold flex items-center gap-1 transition">
@@ -326,13 +419,18 @@
                                     </button>
 
                                     <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
-                                        {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 翻譯
+                                        {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 
+                                        翻譯
                                     </button>
                                 </div>
                             </div>
+
                             {results && (
                                 <div className="space-y-4 animate-[fadeIn_0.3s]">
-                                    <div className="flex justify-between items-end px-1"><h3 className="font-bold text-slate-700">翻譯結果</h3><span className="text-xs text-slate-400">點擊卡片查看道地說法</span></div>
+                                    <div className="flex justify-between items-end px-1">
+                                        <h3 className="font-bold text-slate-700">翻譯結果</h3>
+                                        <span className="text-xs text-slate-400">點擊卡片查看道地說法</span>
+                                    </div>
                                     {results.length === 0 ? <div className="text-center text-slate-400 py-8">沒有結果</div> : 
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             {results.map((item, i) => <ResultCard key={i} item={item} onClick={() => openSuggestion(item.text)} />)}
@@ -340,7 +438,13 @@
                                     }
                                 </div>
                             )}
-                            {!results && !loading && <div className="text-center py-20 opacity-40"><Icons.Search className="mx-auto mb-4 text-slate-300 w-10 h-10" /><p>輸入文字開始學習</p></div>}
+                            
+                            {!results && !loading && (
+                                <div className="text-center py-20 opacity-40">
+                                    <Icons.Search className="mx-auto mb-4 text-slate-300 w-10 h-10" />
+                                    <p>輸入文字開始學習</p>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -348,8 +452,15 @@
                         <div className="space-y-4">
                             <div className="relative mb-4">
                                 <Icons.Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                                <input type="text" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="搜尋歷史紀錄..." className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 transition" />
+                                <input
+                                    type="text"
+                                    value={historySearch}
+                                    onChange={(e) => setHistorySearch(e.target.value)}
+                                    placeholder="搜尋歷史紀錄..."
+                                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 transition"
+                                />
                             </div>
+
                             {filteredHistory.length === 0 ? <div className="text-center py-10 text-slate-400">{historySearch ? '查無符合紀錄' : '暫無紀錄'}</div> : 
                                 filteredHistory.map((h, i) => (
                                     <div key={h.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm group">
@@ -368,11 +479,15 @@
                                                 }} className="text-slate-300 hover:text-red-500"><Icons.Trash2 className="w-4 h-4"/></button>
                                             </div>
                                         </div>
-                                        <div className="font-chinese font-bold text-lg text-slate-800 mb-2"><HighlightText text={h.text} highlight={historySearch} /></div>
+                                        <div className="font-chinese font-bold text-lg text-slate-800 mb-2">
+                                            <HighlightText text={h.text} highlight={historySearch} />
+                                        </div>
                                         <div className="flex flex-wrap gap-2">
                                             {h.results.map((r, idx) => (
                                                 <span key={idx} className="text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 text-slate-600 flex items-center gap-1">
-                                                    <HighlightText text={r.text} highlight={historySearch} /> <span className="text-teal-600 font-mono">{r.jyutping}</span> <AudioButton text={r.text} />
+                                                    <HighlightText text={r.text} highlight={historySearch} />
+                                                    <span className="text-teal-600 font-mono">{r.jyutping}</span>
+                                                    <AudioButton text={r.text} />
                                                 </span>
                                             ))}
                                         </div>
@@ -383,21 +498,29 @@
                     )}
                 </main>
 
+                {/* Modal */}
                 {modalData && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-[fadeIn_0.2s]">
                         <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-5 relative">
                             <button onClick={() => setModalData(null)} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"><Icons.X className="w-5 h-5" /></button>
                             <h3 className="font-bold text-slate-800 mb-1">道地港式說法</h3>
                             <p className="text-sm text-slate-500 mb-4">"{modalData.word}" 在香港還可以說...</p>
-                            {modalData.loading ? <div className="py-8 flex justify-center text-teal-600"><Icons.Loader2 className="animate-spin w-6 h-6"/></div> : 
+                            
+                            {modalData.loading ? 
+                                <div className="py-8 flex justify-center text-teal-600"><Icons.Loader2 className="animate-spin w-6 h-6"/></div> : 
                                 <div className="space-y-2">
                                     {modalData.items.length === 0 ? <div className="text-center text-sm text-slate-400 py-4">沒有特別的替代說法</div> :
                                         modalData.items.map((s, i) => (
                                             <div key={i} className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                                <div><div className="font-bold text-slate-800">{s.text} <span className="text-teal-600 text-xs font-normal font-mono">{s.jyutping}</span></div><div className="text-xs text-slate-500">{s.explanation}</div></div>
+                                                <div>
+                                                    <div className="font-bold text-slate-800">{s.text} <span className="text-teal-600 text-xs font-normal font-mono">{s.jyutping}</span></div>
+                                                    <div className="text-xs text-slate-500">{s.explanation}</div>
+                                                </div>
                                                 <div className="flex gap-1">
                                                     <div className="scale-90"><AudioButton text={s.text} /></div>
-                                                    <button onClick={() => handleAddSuggestion(s)} className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-full transition hover:scale-110" title="加入翻譯結果"><Icons.Plus className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleAddSuggestion(s)} className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-full transition hover:scale-110" title="加入翻譯結果">
+                                                        <Icons.Plus className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))
