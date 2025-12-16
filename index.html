@@ -15,7 +15,7 @@
     <!-- 3. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. SheetJS (Excel 功能) -->
+    <!-- 4. SheetJS (Excel) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <!-- 字體 -->
@@ -73,59 +73,49 @@
         Upload: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       };
 
+      // --- 核心 API 邏輯 (修正版：使用 v1 + 移除 JSON Config) ---
       const callGeminiApi = async (apiKey, prompt) => {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // 使用 v1 正式版 API，搭配 gemini-1.5-flash (每天 1500 次)
+        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        
         const response = await fetch(url, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            contents: [{ parts: [{ text: prompt }] }] 
+            // 注意：這裡移除了 generationConfig，避免 v1 報錯
+          })
         });
+
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error?.message || `API 錯誤 (${response.status})`);
+            const msg = errData.error?.message || `API 錯誤 (${response.status})`;
+            if (msg.includes('quota') || response.status === 429) {
+                throw new Error("API 額度已達上限 (每天1500次)，請稍後再試。");
+            }
+            throw new Error(msg);
         }
+
         const data = await response.json();
         let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error("API 回傳格式不如預期");
         
-        // 修正：移除 Markdown 標籤，解決 2.5 Flash 回傳格式問題
+        // 手動清洗 Markdown 標記，確保 JSON 可以被解析
         text = text.replace(/```json|```/g, '').trim();
         
         return JSON.parse(text);
       };
 
       const translateToCantonese = async (inputText, apiKey) => {
-        const prompt = `
-          You are a Cantonese expert and teacher. 
-          Your task is to analyze "${inputText}" and convert it into a structured format for learning.
-          Rules: 
-          1. **Segmentation Strategy**:
-                 - **Respect User Spacing**: If the input text is separated by spaces (e.g., "食飯 瞓覺"), treat each space-separated segment as a distinct, single vocabulary item. Do NOT break these segments down further.
-                 - **No Spaces**: If the input is a continuous string without spaces (e.g., "身體健康"), treat the **entire string** as one single vocabulary item/phrase. Do not segment it into component words unless it is clearly a long, complex sentence structure. Prioritize keeping it as one unit.
-
-          2. **Content Handling**:
-                 - **Keep** significant content words (Nouns, Verbs, Adjectives, Idioms).
-                 - **Remove** only grammatical particles (like 嗎, 呢) if they appear in a long sentence context, but preserve them if they are part of a specific phrase the user typed.
-
-          3. **Output Format**:
-                 - Convert the retained words to **Traditional Chinese**.
-                 - Provide the **LSHK Jyutping** (Hong Kong Linguistic Society) romanization with tone numbers.
-                 - Return the result as a JSON object matching the schema.
-          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]
-        `;
+        const prompt = `You are a Cantonese expert. Analyze "${inputText}". 
+          Rules: 1. Respect spaces for segmentation. 2. If no spaces, treat as one phrase. 3. Filter particles only for sentences.
+          Output JSON Array ONLY: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]`;
         return await callGeminiApi(apiKey, prompt);
       };
 
       const getColloquialSuggestions = async (word, apiKey) => {
-        // 修正：加入 explanation 欄位要求，避免 UI 顯示錯誤
-        const prompt = `
-          The User is learning Cantonese. They have seleted the word: "${word}".
-          Provide 2 to 3 **Hong Kong colloquial Cantonese** synonyms, slang, or more natural spoken alternatives for this word.
-          Example:
-              If input is "吃飯" (Eat rice/Have a meal), output "食飯" (Standard spoken) and "食嘢" (Eat something).
-              If input is "冰淇淋" (Ice cream), output "雪糕".
-              If input is "老師" (Teacher), output "阿Sir" or "Miss" (if common context applies) or just return the same if it is already natural.
-          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj", "explanation": "Meaning/Context"}]
-        `;
+        const prompt = `Cantonese Learning. Word: "${word}". Provide 2-3 HK colloquial synonyms.
+          Output JSON Array ONLY: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj", "explanation": "Meaning/Context"}]`;
         try {
             const result = await callGeminiApi(apiKey, prompt);
             return Array.isArray(result) ? result : [];
@@ -275,11 +265,9 @@
                 jyutping: item.jyutping,
                 partOfSpeech: '口語'
             };
-            // 1. Update Results
             if (results && !results.some(r => r.text === newItem.text)) {
                 setResults(prev => [...prev, newItem]);
             }
-            // 2. Update History
             if (currentRecordId) {
                 const updatedHistory = history.map(rec => {
                     if (rec.id === currentRecordId) {
