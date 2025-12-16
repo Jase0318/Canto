@@ -75,7 +75,7 @@
 
       // --- 核心邏輯：直接使用 fetch 呼叫 API (最穩定方案) ---
       const callGeminiApi = async (apiKey, prompt) => {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
           method: 'POST',
@@ -329,11 +329,11 @@
                                 <textarea 
                                     value={inputText}
                                     onChange={e => setInputText(e.target.value)}
-                                    placeholder="輸入中文... (by Gemini 2.0 exp)"
+                                    placeholder="輸入中文... "
                                     className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"
                                 ></textarea>
                                 <div className="flex justify-between items-center px-4 pb-4">
-                                    <span className="text-xs text-slate-400">AI 智能分析</span>
+                                    <span className="text-xs text-slate-400">AI 智能分析 by Gemini 2.0 exp</span>
                                     <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed">
                                         {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 
                                         翻譯
