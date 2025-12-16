@@ -15,7 +15,7 @@
     <!-- 3. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. SheetJS (Excel) -->
+    <!-- 4. SheetJS (Excel 功能) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <!-- 字體 -->
@@ -73,35 +73,30 @@
         Upload: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       };
 
-      // --- 核心 API 邏輯 (修正版：使用 v1 + 移除 JSON Config) ---
       const callGeminiApi = async (apiKey, prompt) => {
-        // 使用 v1 正式版 API，搭配 gemini-1.5-flash (每天 1500 次)
-        const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        // 使用 gemini-2.0-flash-exp，這是最新的免費高額度模型
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            contents: [{ parts: [{ text: prompt }] }] 
-            // 注意：這裡移除了 generationConfig，避免 v1 報錯
+            contents: [{ parts: [{ text: prompt }] }],
+            // 2.0 Flash 支援 responseMimeType，這能確保穩定的 JSON
+            generationConfig: { response_mime_type: "application/json" } 
           })
         });
-
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
             const msg = errData.error?.message || `API 錯誤 (${response.status})`;
             if (msg.includes('quota') || response.status === 429) {
+                // 如果您使用 2.0 還是遇到 429，那才是真的用完了，但 2.0 有 1500 次，不容易用完
                 throw new Error("API 額度已達上限 (每天1500次)，請稍後再試。");
             }
             throw new Error(msg);
         }
-
         const data = await response.json();
         let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error("API 回傳格式不如預期");
-        
-        // 手動清洗 Markdown 標記，確保 JSON 可以被解析
-        text = text.replace(/```json|```/g, '').trim();
         
         return JSON.parse(text);
       };
