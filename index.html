@@ -329,11 +329,11 @@
                                 <textarea 
                                     value={inputText}
                                     onChange={e => setInputText(e.target.value)}
-                                    placeholder="輸入中文... (例如: 冰淇淋)"
+                                    placeholder="輸入中文... (by Gemini 2.0 exp)"
                                     className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"
                                 ></textarea>
                                 <div className="flex justify-between items-center px-4 pb-4">
-                                    <span className="text-xs text-slate-400">AI 智能分析 by Gemini 2.0 exp </span>
+                                    <span className="text-xs text-slate-400">AI 智能分析</span>
                                     <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed">
                                         {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 
                                         翻譯
