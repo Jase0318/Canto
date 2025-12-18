@@ -387,6 +387,17 @@
                                     className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"
                                 ></textarea>
                                 <div className="flex justify-between items-center px-4 pb-4">
+                                    {/* 隱藏的檔案輸入 */}
+                                    <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".xlsx" className="hidden" />
+                                    
+                                    {/* 匯入按鈕 */}
+                                    <button onClick={() => fileInputRef.current.click()} className="text-slate-400 hover:text-teal-600 text-xs font-bold flex items-center gap-1 transition">
+                                        <Icons.Upload className="w-4 h-4" /> 匯入 Excel
+                                    </button>
+
+                                    <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
+                                        {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 翻譯
+                                    </button>
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs text-slate-400">AI 智能分析 by Gemini 2.5 Flash</span>
                                         {/* 新增：更換 Key 按鈕 */}
@@ -442,6 +453,10 @@
                                     <div key={h.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm group">
                                         <div className="flex justify-between mb-2">
                                             <span className="text-xs text-slate-400">{new Date(h.date).toLocaleString()}</span>
+                                            {/* 匯出按鈕 */}
+                                                <button onClick={() => handleExport(h)} className="text-slate-300 hover:text-teal-600 transition" title="匯出 Excel">
+                                                    <Icons.Download className="w-4 h-4" />
+                                                </button>
                                             <button onClick={() => {
                                                 const n = history.filter(x => x.id !== h.id);
                                                 setHistory(n);
