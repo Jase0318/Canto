@@ -8,11 +8,11 @@
     <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. React & ReactDOM (使用最穩定的 UMD 版本) -->
+    <!-- 2. React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- 3. Babel (編譯器) -->
+    <!-- 3. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- 4. SheetJS (Excel 功能) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -37,7 +37,6 @@
     </script>
     <style>
       body { background-color: #f8fafc; }
-      /* 隱藏未編譯的內容 */
       #root:empty { display: none; }
     </style>
 </head>
@@ -53,17 +52,16 @@
 
     <!-- 應用程式邏輯 -->
     <script type="text/babel">
-      // 設定超時偵測：如果 5 秒還沒載入 React，顯示錯誤訊息
       setTimeout(() => {
         const loader = document.getElementById('loading-fallback');
         if (loader && loader.style.display !== 'none') {
-           document.getElementById('loading-text').innerHTML = '<span class="text-red-500">啟動過久，請嘗試「強制重新整理」(Ctrl+F5)。<br/>若問題持續，可能是網路無法連線至 CDN。</span>';
+           document.getElementById('loading-text').innerHTML = '<span class="text-red-500">啟動過久，請嘗試「強制重新整理」(Ctrl+F5)。</span>';
         }
       }, 8000);
 
-      const { useState, useEffect, useCallback, useMemo } = React;
+      const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-      // --- 圖示元件 (SVG) ---
+      // --- 圖示元件 (已修復 Download/Upload 亂碼) ---
       const Icons = {
         Sparkles: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M9 9v4"/><path d="M3 5h4"/><path d="M9 3v2"/></svg>,
         Search: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
@@ -73,11 +71,13 @@
         KeyRound: ({className}) => <svg width="24" height="24" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>,
         Loader2: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
         Plus: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
-        Download: : ({className => > <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-        Upload: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/>/><line x1="12" y1="3" x2="12" y2="15"/></svg>     
+        Download: ({className}) => <svg width="18" height="18" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+        Upload: ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>     
       };
-      // --- 核心邏輯：直接使用 fetch 呼叫 API (最穩定方案) ---
+
+      // --- 核心邏輯 ---
       const callGeminiApi = async (apiKey, prompt) => {
+        // 保留您原始設定的 2.5-flash
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
@@ -134,7 +134,7 @@
         `;
         try {
             const result = await callGeminiApi(apiKey, prompt);
-            return result.suggestions || result; // 兼容可能的格式差異
+            return result.suggestions || result; 
         } catch (e) {
             return [];
         }
@@ -280,7 +280,6 @@
             };
             reader.readAsBinaryString(file);
         };
-        //匯出入功能
           
         const handleTranslate = async () => {
             if(!inputText.trim()) return;
@@ -386,25 +385,19 @@
                                     className="w-full h-32 p-4 text-lg bg-transparent border-none resize-none outline-none font-chinese text-slate-700 placeholder:text-slate-300"
                                 ></textarea>
                                 <div className="flex justify-between items-center px-4 pb-4">
-                                    {/* 隱藏的檔案輸入 */}
-                                    <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".xlsx" className="hidden" />
-                                    
-                                    {/* 匯入按鈕 */}
-                                    <button onClick={() => fileInputRef.current.click()} className="text-slate-400 hover:text-teal-600 text-xs font-bold flex items-center gap-1 transition">
-                                        <Icons.Upload className="w-4 h-4" /> 匯入 Excel
-                                    </button>
-
-                                    <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
-                                        {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 翻譯
-                                    </button>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-slate-400">AI 智能分析 by Gemini 2.5 Flash</span>
+                                    <div className="flex gap-2">
+                                        <input type="file" ref={fileInputRef} onChange={handleImportFile} accept=".xlsx" className="hidden" />
+                                        <button onClick={() => fileInputRef.current.click()} className="text-slate-400 hover:text-teal-600 text-xs font-bold flex items-center gap-1 transition">
+                                            <Icons.Upload className="w-4 h-4" /> 匯入 Excel
+                                        </button>
+                                        
                                         {/* 新增：更換 Key 按鈕 */}
                                         <button onClick={resetApiKey} className="text-slate-400 hover:text-teal-600 text-xs font-bold flex items-center gap-1 transition ml-2 border-l border-slate-200 pl-2">
                                             <Icons.KeyRound className="w-3 h-3" /> 更換 Key
                                         </button>
                                     </div>
-                                    <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed">
+
+                                    <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
                                         {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 
                                         翻譯
                                     </button>
