@@ -213,6 +213,7 @@
         const [apiKey, setApiKey] = useState(null);
         const [modalData, setModalData] = useState(null);
         const [historySearch, setHistorySearch] = useState('');
+        const fileInputRef = useRef(null);
         
         // 新增：紀錄當前查詢的 ID，用於更新歷史紀錄
         const [currentRecordId, setCurrentRecordId] = useState(null);
@@ -236,7 +237,48 @@
                 setApiKey(null);
             }
         };
+        //匯出入功能
+          const handleExport = (record) => {
+            const date = new Date(record.date);
+            const mm = (date.getMonth() + 1).toString().padStart(2, '0');
+            const dd = date.getDate().toString().padStart(2, '0');
+            const dateStr = `${mm}${dd}`;
+            const data = record.results.map(r => ({ "生字": r.text, "拼音": r.jyutping }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, dateStr);
+            XLSX.writeFile(wb, `粵語生字匯出_${dateStr}.xlsx`);
+        };
 
+        const handleImportFile = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+                    if (json.length === 0) throw new Error("檔案內容為空");
+                    const importedResults = json.map(row => ({
+                        text: row['生字'], jyutping: row['拼音'], partOfSpeech: '匯入'
+                    })).filter(item => item.text && item.jyutping);
+                    if (importedResults.length === 0) throw new Error("格式錯誤");
+                    const newRecord = { id: Date.now(), text: `匯入資料 (${file.name})`, results: importedResults, date: new Date() };
+                    const newHistory = [newRecord, ...history].slice(0, 50);
+                    setHistory(newHistory);
+                    localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
+                    alert(`成功匯入 ${importedResults.length} 筆資料！`);
+                    setView('HISTORY');
+                } catch (error) { alert("匯入失敗: " + error.message); }
+                e.target.value = '';
+            };
+            reader.readAsBinaryString(file);
+        };
+        //匯出入功能
+          
         const handleTranslate = async () => {
             if(!inputText.trim()) return;
             setLoading(true);
