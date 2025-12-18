@@ -110,8 +110,18 @@
                  - **No Spaces**: If the input is a continuous string without spaces (e.g., "身體健康"), treat the **entire string** as one single vocabulary item/phrase. Do not segment it into component words unless it is clearly a long, complex sentence structure. Prioritize keeping it as one unit.
 
           2. **Content Handling**:
-                 - **Keep** significant content words (Nouns, Verbs, Adjectives, Idioms).
-                 - **Remove** only grammatical particles (like 嗎, 呢) if they appear in a long sentence context, but preserve them if they are part of a specific phrase the user typed.
+                 - **Keep (Significant Content Words)**: 
+                       - Nouns (e.g., 知識庫, 數據)
+                       - Verbs (e.g., 整合, 提供)
+                       - Adjectives (e.g., 深度, 最新)
+                       - Adverbs of manner (only if they carry strong semantic meaning, e.g., 隨手, 即時)
+                       - Proper Nouns (e.g., 港話通).
+                 - **Remove (Filter Out)**:
+                       - All Numbers and Dates (e.g., 2024年, 10個)
+                       - All Punctuation Marks (except those connecting compound terms)
+                       - Grammatical Particles/Mood words (e.g., 嗎, 呢, 的, 了, 著, 過, 吧)
+                       - Prepositions and Conjunctions (e.g., 於, 在, 與, 和, 以及)
+                       - Basic Pronouns (e.g., 我, 你, 他, 這, 那)
 
           3. **Output Format**:
                  - Convert the retained words to **Traditional Chinese**.
