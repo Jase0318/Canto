@@ -75,7 +75,7 @@
 
       // --- 核心邏輯：直接使用 fetch 呼叫 API (最穩定方案) ---
       const callGeminiApi = async (apiKey, prompt) => {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
           method: 'POST',
@@ -384,7 +384,7 @@
                                 ></textarea>
                                 <div className="flex justify-between items-center px-4 pb-4">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-slate-400">AI 智能分析 by Gemini 1.5 Flash</span>
+                                        <span className="text-xs text-slate-400">AI 智能分析 by Gemini 2.5 Flash</span>
                                         {/* 新增：更換 Key 按鈕 */}
                                         <button onClick={resetApiKey} className="text-slate-400 hover:text-teal-600 text-xs font-bold flex items-center gap-1 transition ml-2 border-l border-slate-200 pl-2">
                                             <Icons.KeyRound className="w-3 h-3" /> 更換 Key
