@@ -355,7 +355,51 @@
                 localStorage.setItem('cantolearn_history_v2', JSON.stringify(updatedHistory));
             }
         };
+        // --- 新增功能：切換單字標記狀態 (並存入 localStorage) ---
+        const toggleHighlight = (recordId, itemIndex) => {
+            const newHistory = history.map(rec => {
+                if (rec.id === recordId) {
+                    const newResults = [...rec.results];
+                    // 切換 isHighlighted 屬性 (如果原本沒有這個屬性，!undefined 會變成 true)
+                    newResults[itemIndex] = { 
+                        ...newResults[itemIndex], 
+                        isHighlighted: !newResults[itemIndex].isHighlighted 
+                    };
+                    return { ...rec, results: newResults };
+                }
+                return rec;
+            });
+            setHistory(newHistory);
+            localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
+        };
 
+        // --- 新增功能：匯出全部歷史紀錄 ---
+        const handleExportAll = () => {
+            if (history.length === 0) return alert("目前沒有歷史紀錄可匯出");
+            if (!confirm(`確定要匯出全部共 ${history.length} 筆紀錄嗎？`)) return;
+
+            // 將所有紀錄攤平 (Flatten)
+            const allData = [];
+            history.forEach(rec => {
+                const dateObj = new Date(rec.date);
+                const dateStr = `${dateObj.getFullYear()}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getDate().toString().padStart(2,'0')}`;
+                
+                rec.results.forEach(r => {
+                    allData.push({
+                        "日期": dateStr,
+                        "原文": rec.text, // 為了讓總表好閱讀，加上原文欄位
+                        "生字": r.text,
+                        "拼音": r.jyutping,
+                        "重點標記": r.isHighlighted ? "★" : "" // 順便匯出你的標記
+                    });
+                });
+            });
+
+            const ws = XLSX.utils.json_to_sheet(allData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "所有歷史紀錄");
+            XLSX.writeFile(wb, `CantoLearn_全紀錄_${new Date().toISOString().slice(0,10)}.xlsx`);
+        };
         const filteredHistory = useMemo(() => {
             if (!historySearch.trim()) return history;
             const query = historySearch.toLowerCase();
@@ -437,54 +481,78 @@
                             )}
                         </div>
                     )}
-
                     {view === 'HISTORY' && (
                         <div className="space-y-4">
-                            <div className="relative mb-4">
-                                <Icons.Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                                <input
-                                    type="text"
-                                    value={historySearch}
-                                    onChange={(e) => setHistorySearch(e.target.value)}
-                                    placeholder="搜尋歷史紀錄..."
-                                    className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 transition"
-                                />
+                            <div className="flex gap-2 mb-4">
+                                <div className="relative flex-1">
+                                    <Icons.Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        value={historySearch}
+                                        onChange={(e) => setHistorySearch(e.target.value)}
+                                        placeholder="搜尋歷史紀錄..."
+                                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 transition"
+                                    />
+                                </div>
+                                {/* 新增：全部匯出按鈕 */}
+                                <button 
+                                    onClick={handleExportAll}
+                                    className="bg-white border border-slate-200 text-slate-600 hover:text-teal-600 hover:border-teal-500 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition shadow-sm whitespace-nowrap"
+                                >
+                                    <Icons.Download className="w-4 h-4" /> 匯出全部
+                                </button>
                             </div>
 
-                            {filteredHistory.length === 0 ? <div className="text-center py-10 text-slate-400">{historySearch ? '查無符合紀錄' : '暫無紀錄'}</div> : 
-                                filteredHistory.map((h, i) => (
+                            {filteredHistory.length === 0 ?
+                                <div className="text-center py-10 text-slate-400">{historySearch ? '查無符合紀錄' : '暫無紀錄'}</div> : 
+                                filteredHistory.map((h) => (
                                     <div key={h.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm group">
                                         <div className="flex justify-between mb-2">
                                             <span className="text-xs text-slate-400">{new Date(h.date).toLocaleString()}</span>
                                             <div className="flex gap-2">
-                                            {/* 匯出按鈕 */}
                                                 <button onClick={() => handleExport(h)} className="text-slate-300 hover:text-teal-600 transition" title="匯出 Excel">
                                                     <Icons.Download className="w-4 h-4" />
                                                 </button>
-                                            <button onClick={() => {
-                                                const n = history.filter(x => x.id !== h.id);
-                                                setHistory(n);
-                                                localStorage.setItem('cantolearn_history_v2', JSON.stringify(n));
-                                            }} className="text-slate-300 hover:text-red-500"><Icons.Trash2 className="w-4 h-4"/></button>
+                                                <button onClick={() => {
+                                                    const n = history.filter(x => x.id !== h.id);
+                                                    setHistory(n);
+                                                    localStorage.setItem('cantolearn_history_v2', JSON.stringify(n));
+                                                }} className="text-slate-300 hover:text-red-500"><Icons.Trash2 className="w-4 h-4"/></button>
                                             </div>
                                         </div>
                                         <div className="font-chinese font-bold text-lg text-slate-800 mb-2">
                                             <HighlightText text={h.text} highlight={historySearch} />
                                         </div>
                                         <div className="flex flex-wrap gap-2">
-                                            {h.results.map((r, idx) => (
-                                                <span key={idx} className="text-xs bg-slate-50 px-2 py-1 rounded border border-slate-200 text-slate-600 flex items-center gap-1">
-                                                    <HighlightText text={r.text} highlight={historySearch} />
-                                                    <span className="text-teal-600 font-mono">{r.jyutping}</span>
-                                                    <AudioButton text={r.text} />
-                                                </span>
-                                            ))}
+                                            {h.results.map((r, idx) => {
+                                                // 判斷是否被標記，決定樣式
+                                                const isHighlighted = r.isHighlighted;
+                                                const baseStyle = "text-xs px-2 py-1 rounded border flex items-center gap-1 cursor-pointer select-none transition-all duration-200";
+                                                // 標記樣式：黃底、深黃字、黃邊框； 未標記：灰底、灰字
+                                                const colorStyle = isHighlighted 
+                                                    ? "bg-yellow-100 border-yellow-400 text-yellow-800 shadow-sm scale-105 font-bold" 
+                                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:border-teal-300";
+
+                                                return (
+                                                    <span 
+                                                        key={idx} 
+                                                        onClick={() => toggleHighlight(h.id, idx)}
+                                                        className={`${baseStyle} ${colorStyle}`}
+                                                        title="點擊標記/取消重點"
+                                                    >
+                                                        <HighlightText text={r.text} highlight={historySearch} />
+                                                        <span className={`font-mono ${isHighlighted ? 'text-yellow-700' : 'text-teal-600'}`}>{r.jyutping}</span>
+                                                        <AudioButton text={r.text} />
+                                                    </span>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 ))
                             }
                         </div>
                     )}
+                  
                 </main>
 
                 {/* Modal */}
