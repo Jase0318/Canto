@@ -526,7 +526,6 @@
                                         className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-teal-500 transition"
                                     />
                                 </div>
-                                {/* 新增：全部匯出按鈕 */}
                                 <button 
                                     onClick={handleExportAll}
                                     className="bg-white border border-slate-200 text-slate-600 hover:text-teal-600 hover:border-teal-500 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition shadow-sm whitespace-nowrap"
@@ -557,27 +556,45 @@
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {h.results.map((r, idx) => {
-                                                // 判斷是否被標記，決定樣式
-                                                const isHighlighted = r.isHighlighted;
+                                                // 判斷狀態：0(無), 1(黃), 2(藍)，兼容舊版 isHighlighted
+                                                const state = r.highlightState || (r.isHighlighted ? 1 : 0);
                                                 const baseStyle = "text-xs px-2 py-1 rounded border flex items-center gap-1 cursor-pointer select-none transition-all duration-200";
-                                                // 標記樣式：黃底、深黃字、黃邊框； 未標記：灰底、灰字
-                                                const colorStyle = isHighlighted 
-                                                    ? "bg-yellow-100 border-yellow-400 text-yellow-800 shadow-sm scale-105 font-bold" 
-                                                    : "bg-slate-50 border-slate-200 text-slate-600 hover:border-teal-300";
+                                                
+                                                let colorStyle = "bg-slate-50 border-slate-200 text-slate-600 hover:border-teal-300";
+                                                let pyStyle = "text-teal-600";
+                                                
+                                                if (state === 1) {
+                                                    colorStyle = "bg-yellow-100 border-yellow-400 text-yellow-800 shadow-sm scale-105 font-bold";
+                                                    pyStyle = "text-yellow-700";
+                                                } else if (state === 2) {
+                                                    colorStyle = "bg-blue-50 border-blue-300 text-blue-800 shadow-sm scale-105 font-bold";
+                                                    pyStyle = "text-blue-700";
+                                                }
 
                                                 return (
                                                     <span 
                                                         key={idx} 
                                                         onClick={() => toggleHighlight(h.id, idx)}
                                                         className={`${baseStyle} ${colorStyle}`}
-                                                        title="點擊標記/取消重點"
+                                                        title="點擊切換標記顏色"
                                                     >
                                                         <HighlightText text={r.text} highlight={historySearch} />
-                                                        <span className={`font-mono ${isHighlighted ? 'text-yellow-700' : 'text-teal-600'}`}>{r.jyutping}</span>
+                                                        <span className={`font-mono ${pyStyle}`}>{r.jyutping}</span>
                                                         <AudioButton text={r.text} />
                                                     </span>
                                                 );
                                             })}
+                                        </div>
+                                        
+                                        {/* 新增：筆記區塊 */}
+                                        <div className="mt-4 pt-3 border-t border-slate-100">
+                                            <textarea
+                                                value={h.note || ''}
+                                                onChange={(e) => updateNote(h.id, e.target.value)}
+                                                placeholder="輸入筆記... (系統會自動儲存)"
+                                                className="w-full text-sm p-2.5 bg-slate-50/50 hover:bg-white focus:bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition resize-none placeholder:text-slate-300 text-slate-700"
+                                                rows="2"
+                                            />
                                         </div>
                                     </div>
                                 ))
