@@ -77,7 +77,6 @@
 
       // --- 核心邏輯 ---
       const callGeminiApi = async (apiKey, prompt) => {
-        // 保留您原始設定的 2.5-flash
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
@@ -95,8 +94,11 @@
         }
 
         const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error("API 回傳格式不如預期");
+        
+        // 強制清理可能的 Markdown 標記，避免 JSON.parse 失敗 (Canvas 環境中常見的錯誤原因)
+        text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
         return JSON.parse(text);
       };
 
@@ -127,8 +129,9 @@
           3. **Output Format**:
                  - Convert the retained words to **Traditional Chinese**.
                  - Provide the **LSHK Jyutping** (Hong Kong Linguistic Society) romanization with tone numbers.
+                 - Provide a brief translation/meaning in **Taiwanese Mandarin** (台灣繁體中文習慣用語).
                  - Return the result as a JSON object matching the schema.
-          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj"}]
+          Output strictly JSON Array: [{"text": "詞彙", "jyutping": "ping1 jam1", "partOfSpeech": "n/v/adj", "meaning": "台灣用語解釋"}]
         `;
         return await callGeminiApi(apiKey, prompt);
       };
@@ -173,11 +176,12 @@
       };
 
       const ResultCard = ({ item, onClick }) => (
-        <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center relative transition hover:shadow-md hover:-translate-y-1 cursor-pointer group">
+        <div onClick={onClick} className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col items-center relative transition hover:shadow-md hover:-translate-y-1 cursor-pointer group h-full">
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition"><AudioButton text={item.text} /></div>
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{item.partOfSpeech}</span>
           <div className="text-2xl md:text-3xl font-chinese font-medium text-slate-800 mb-1 text-center">{item.text}</div>
-          <div className="text-sm md:text-base font-medium text-teal-600 font-mono bg-teal-50 px-2 py-0.5 rounded">{item.jyutping}</div>
+          <div className="text-sm md:text-base font-medium text-teal-600 font-mono bg-teal-50 px-2 py-0.5 rounded mb-2">{item.jyutping}</div>
+          {item.meaning && <div className="text-sm text-slate-500 text-center mt-auto border-t border-slate-100 pt-2 w-full">{item.meaning}</div>}
         </div>
       );
 
@@ -217,6 +221,27 @@
         );
       };
 
+      // 新增：自訂系統彈窗組件，取代原生的 alert 與 confirm (Canvas 環境專用)
+      const SystemModal = ({ dialog, onClose }) => {
+          if (!dialog) return null;
+          return (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-[fadeIn_0.2s]">
+                  <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 relative">
+                      <h3 className="font-bold text-slate-800 mb-2">
+                          {dialog.type === 'confirm' ? '請確認' : '系統提示'}
+                      </h3>
+                      <p className="text-sm text-slate-600 mb-6 whitespace-pre-wrap">{dialog.message}</p>
+                      <div className="flex justify-end gap-2">
+                          {dialog.type === 'confirm' && (
+                              <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500 font-medium hover:bg-slate-100 rounded-lg transition">取消</button>
+                          )}
+                          <button onClick={() => { dialog.onConfirm?.(); onClose(); }} className="px-5 py-2 bg-teal-600 text-white text-sm rounded-lg font-medium hover:bg-teal-700 transition">確定</button>
+                      </div>
+                  </div>
+              </div>
+          );
+      };
+
       // --- 主程式 App ---
       const App = () => {
         const [view, setView] = useState('TRANSLATE');
@@ -227,6 +252,7 @@
         const [apiKey, setApiKey] = useState(null);
         const [modalData, setModalData] = useState(null);
         const [historySearch, setHistorySearch] = useState('');
+        const [dialog, setDialog] = useState(null); // 新增：控制系統彈窗狀態
         const fileInputRef = useRef(null);
         
         // 新增：紀錄當前查詢的 ID，用於更新歷史紀錄
@@ -244,13 +270,18 @@
             if(h) setHistory(JSON.parse(h));
         }, []);
 
-        // 新增：更換 Key 功能
+        // 新增：更換 Key 功能 (更新為使用自訂 Modal)
         const resetApiKey = () => {
-            if(confirm("確定要更換 API Key 嗎？")) {
-                localStorage.removeItem('cantolearn_api_key');
-                setApiKey(null);
-            }
+            setDialog({
+                type: 'confirm',
+                message: '確定要更換 API Key 嗎？',
+                onConfirm: () => {
+                    localStorage.removeItem('cantolearn_api_key');
+                    setApiKey(null);
+                }
+            });
         };
+
         // --- 更新功能：單一匯出 (支援多色標記與筆記) ---
         const handleExport = (record) => {
             const date = new Date(record.date);
@@ -297,9 +328,11 @@
                     const newHistory = [newRecord, ...history].slice(0, 50);
                     setHistory(newHistory);
                     localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
-                    alert(`成功匯入 ${importedResults.length} 筆資料！`);
+                    setDialog({ type: 'alert', message: `成功匯入 ${importedResults.length} 筆資料！` });
                     setView('HISTORY');
-                } catch (error) { alert("匯入失敗: " + error.message); }
+                } catch (error) { 
+                    setDialog({ type: 'alert', message: "匯入失敗: " + error.message });
+                }
                 e.target.value = '';
             };
             reader.readAsBinaryString(file);
@@ -321,8 +354,9 @@
                 setHistory(newHistory);
                 localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
             } catch(e) {
-                alert("翻譯錯誤: " + e.message);
-                if(e.message.includes("400") || e.message.includes("403")) {
+                // 使用自訂彈窗代替原生的 alert，避免在 iframe 內被阻擋
+                setDialog({ type: 'alert', message: "翻譯錯誤: \n" + e.message });
+                if(e.message.includes("400") || e.message.includes("403") || e.message.includes("API key")) {
                     setApiKey(null); // 若 Key 失效則重設
                 }
             } finally {
@@ -337,6 +371,7 @@
                 setModalData({ loading: false, word, items: Array.isArray(suggs) ? suggs : [] });
             } catch(e) {
                 setModalData(null);
+                setDialog({ type: 'alert', message: "取得道地說法時發生錯誤:\n" + e.message });
             }
         };
 
@@ -368,7 +403,8 @@
                 localStorage.setItem('cantolearn_history_v2', JSON.stringify(updatedHistory));
             }
         };
-      // --- 更新功能：切換單字標記狀態 (三段式切換) ---
+        
+        // --- 更新功能：切換單字標記狀態 (三段式切換) ---
         const toggleHighlight = (recordId, itemIndex) => {
             const newHistory = history.map(rec => {
                 if (rec.id === recordId) {
@@ -389,6 +425,7 @@
             setHistory(newHistory);
             localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
         };
+        
         // --- 新增功能：更新筆記內容 ---
         const updateNote = (recordId, noteText) => {
             const newHistory = history.map(rec => {
@@ -400,38 +437,47 @@
             setHistory(newHistory);
             localStorage.setItem('cantolearn_history_v2', JSON.stringify(newHistory));
         };
+        
        // --- 更新功能：匯出全部歷史紀錄 (支援多色標記與筆記) ---
         const handleExportAll = () => {
-            if (history.length === 0) return alert("目前沒有歷史紀錄可匯出");
-            if (!confirm(`確定要匯出全部共 ${history.length} 筆紀錄嗎？`)) return;
+            if (history.length === 0) {
+                return setDialog({ type: 'alert', message: "目前沒有歷史紀錄可匯出" });
+            }
+            
+            setDialog({
+                type: 'confirm',
+                message: `確定要匯出全部共 ${history.length} 筆紀錄嗎？`,
+                onConfirm: () => {
+                    const allData = [];
+                    history.forEach(rec => {
+                        const dateObj = new Date(rec.date);
+                        const dateStr = `${dateObj.getFullYear()}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getDate().toString().padStart(2,'0')}`;
+                        
+                        rec.results.forEach(r => {
+                            let marker = "";
+                            const state = r.highlightState || (r.isHighlighted ? 1 : 0);
+                            if (state === 1) marker = "⭐ (黃)";
+                            else if (state === 2) marker = "📌 (藍)";
 
-            const allData = [];
-            history.forEach(rec => {
-                const dateObj = new Date(rec.date);
-                const dateStr = `${dateObj.getFullYear()}/${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getDate().toString().padStart(2,'0')}`;
-                
-                rec.results.forEach(r => {
-                    let marker = "";
-                    const state = r.highlightState || (r.isHighlighted ? 1 : 0);
-                    if (state === 1) marker = "⭐ (黃)";
-                    else if (state === 2) marker = "📌 (藍)";
-
-                    allData.push({
-                        "日期": dateStr,
-                        "原文": rec.text,
-                        "生字": r.text,
-                        "拼音": r.jyutping,
-                        "重點標記": marker,
-                        "筆記": rec.note || "" 
+                            allData.push({
+                                "日期": dateStr,
+                                "原文": rec.text,
+                                "生字": r.text,
+                                "拼音": r.jyutping,
+                                "重點標記": marker,
+                                "筆記": rec.note || "" 
+                            });
+                        });
                     });
-                });
-            });
 
-            const ws = XLSX.utils.json_to_sheet(allData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "所有歷史紀錄");
-            XLSX.writeFile(wb, `CantoLearn_全紀錄_${new Date().toISOString().slice(0,10)}.xlsx`);
+                    const ws = XLSX.utils.json_to_sheet(allData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "所有歷史紀錄");
+                    XLSX.writeFile(wb, `CantoLearn_全紀錄_${new Date().toISOString().slice(0,10)}.xlsx`);
+                }
+            });
         };
+        
         const filteredHistory = useMemo(() => {
             if (!historySearch.trim()) return history;
             const query = historySearch.toLowerCase();
@@ -454,7 +500,7 @@
                         <nav className="flex bg-slate-100 p-1 rounded-lg">
                             {['TRANSLATE', 'HISTORY'].map(v => (
                                 <button key={v} onClick={() => setView(v)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${view === v ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}>
-                                    {v === 'TRANSLATE' ? '翻譯' : '歷史'}
+                                    {v === 'TRANSLATE' ? '查詢' : '歷史'}
                                 </button>
                             ))}
                         </nav>
@@ -486,7 +532,7 @@
 
                                     <button onClick={handleTranslate} disabled={loading || !inputText} className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow disabled:opacity-50 disabled:cursor-not-allowed ml-auto">
                                         {loading ? <Icons.Loader2 className="animate-spin w-4 h-4" /> : <Icons.Sparkles className="w-4 h-4" />} 
-                                        翻譯
+                                        查詢
                                     </button>
                                 </div>
                             </div>
@@ -494,7 +540,7 @@
                             {results && (
                                 <div className="space-y-4 animate-[fadeIn_0.3s]">
                                     <div className="flex justify-between items-end px-1">
-                                        <h3 className="font-bold text-slate-700">翻譯結果</h3>
+                                        <h3 className="font-bold text-slate-700">查詢結果</h3>
                                         <span className="text-xs text-slate-400">點擊卡片查看道地說法</span>
                                     </div>
                                     {results.length === 0 ? <div className="text-center text-slate-400 py-8">沒有結果</div> : 
@@ -625,7 +671,7 @@
                                                 <div className="flex gap-1">
                                                     <div className="scale-90"><AudioButton text={s.text} /></div>
                                                     {/* 新增：加入結果按鈕 */}
-                                                    <button onClick={() => handleAddSuggestion(s)} className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-full transition hover:scale-110" title="加入翻譯結果">
+                                                    <button onClick={() => handleAddSuggestion(s)} className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-full transition hover:scale-110" title="加入查詢結果">
                                                         <Icons.Plus className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -637,6 +683,9 @@
                         </div>
                     </div>
                 )}
+
+                {/* 系統彈窗 */}
+                <SystemModal dialog={dialog} onClose={() => setDialog(null)} />
             </div>
         );
       };
